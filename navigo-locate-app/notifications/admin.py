@@ -1,10 +1,13 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import Notification
 
 
 @admin.register(Notification)
-class NotificationAdmin(admin.ModelAdmin):
+class NotificationAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = ("id", "user", "channel", "status", "title", "created_at", "sent_at")
     list_filter = ("channel", "status", "created_at")
     list_editable = ("status",)

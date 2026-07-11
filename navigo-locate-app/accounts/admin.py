@@ -3,12 +3,19 @@ from django.contrib import messages
 from django.contrib.admin.actions import delete_selected
 from django.contrib.auth.admin import UserAdmin
 from django.core.exceptions import PermissionDenied
+from unfold.admin import ModelAdmin
+from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from .models import User
 
 
 @admin.register(User)
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(UserAdmin, ModelAdmin):
+    form = UserChangeForm
+    add_form = UserCreationForm
+    change_password_form = AdminPasswordChangeForm
+    compressed_fields = True
+    warn_unsaved_form = True
     fieldsets = UserAdmin.fieldsets + (
         (
             "Safety Profile",

@@ -1,10 +1,13 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import MapProvider
 
 
 @admin.register(MapProvider)
-class MapProviderAdmin(admin.ModelAdmin):
+class MapProviderAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = ("id", "name", "provider", "is_active", "supports_routing", "supports_traffic")
     list_filter = ("provider", "is_active", "supports_routing", "supports_traffic")
     list_editable = ("is_active", "supports_routing", "supports_traffic")

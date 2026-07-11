@@ -31,6 +31,7 @@ class TrackingSessionSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "user",
+            "assigned_organizations",
             "status",
             "emergency",
             "public_share_token",
@@ -49,6 +50,7 @@ class TrackingSessionSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "user",
+            "assigned_organizations",
             "status",
             "started_at",
             "ended_at",
@@ -78,6 +80,7 @@ class RouteHistorySerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "user",
+            "assigned_organizations",
             "status",
             "emergency",
             "started_at",

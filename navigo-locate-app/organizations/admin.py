@@ -1,10 +1,13 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import Organization, OrganizationMember
 
 
 @admin.register(Organization)
-class OrganizationAdmin(admin.ModelAdmin):
+class OrganizationAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = ("id", "name", "organization_type", "phone", "is_verified", "created_at")
     list_filter = ("organization_type", "is_verified", "created_at")
     list_editable = ("organization_type", "is_verified")
@@ -16,7 +19,9 @@ class OrganizationAdmin(admin.ModelAdmin):
 
 
 @admin.register(OrganizationMember)
-class OrganizationMemberAdmin(admin.ModelAdmin):
+class OrganizationMemberAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = ("id", "organization", "user", "role", "is_active", "joined_at")
     list_filter = ("role", "is_active", "joined_at")
     list_editable = ("role", "is_active")

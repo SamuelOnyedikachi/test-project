@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import LocationViewAudit, RoutePoint, TrackingSession
+from .access import sessions_visible_to
 from .services import get_cached_live_location, record_location_update, sync_cached_session_status
 from .serializers import (
     RouteHistorySerializer,
@@ -134,7 +135,7 @@ class LiveTrackingView(generics.RetrieveAPIView):
     serializer_class = TrackingSessionSerializer
 
     def get_queryset(self):
-        return TrackingSession.objects.filter(user=self.request.user).annotate(
+        return sessions_visible_to(self.request.user).annotate(
             route_points_count=Count("route_points")
         )
 
@@ -150,7 +151,7 @@ class LiveSnapshotView(APIView):
 
     def get(self, request, session_id):
         session = generics.get_object_or_404(
-            TrackingSession.objects.filter(user=request.user),
+            sessions_visible_to(request.user),
             id=session_id,
         )
         record_location_view(session, request)

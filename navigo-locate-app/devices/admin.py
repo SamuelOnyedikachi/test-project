@@ -1,10 +1,13 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import Device
 
 
 @admin.register(Device)
-class DeviceAdmin(admin.ModelAdmin):
+class DeviceAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = (
         "id",
         "user",

@@ -187,6 +187,11 @@ UNFOLD = {
                 'separator': True,
                 'items': [
                     {
+                        'title': 'Live Operations Map',
+                        'icon': 'location_searching',
+                        'link': '/admin/operations/live-tracking/',
+                    },
+                    {
                         'title': 'Tracking Sessions',
                         'icon': 'route',
                         'link': '/admin/tracking/trackingsession/',

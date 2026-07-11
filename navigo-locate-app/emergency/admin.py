@@ -1,10 +1,13 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import EmergencyIncident
 
 
 @admin.register(EmergencyIncident)
-class EmergencyIncidentAdmin(admin.ModelAdmin):
+class EmergencyIncidentAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = (
         "id",
         "user",

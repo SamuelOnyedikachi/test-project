@@ -1,10 +1,13 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import TrustedContact
 
 
 @admin.register(TrustedContact)
-class TrustedContactAdmin(admin.ModelAdmin):
+class TrustedContactAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = (
         "id",
         "owner",

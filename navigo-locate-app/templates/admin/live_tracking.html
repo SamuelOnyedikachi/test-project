@@ -1,0 +1,113 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <style>
+    .operations-shell { display:grid; grid-template-columns:minmax(0,1fr) 360px; min-height:680px; border:1px solid #e5e7eb; background:#fff; }
+    #operations-map { min-height:680px; }
+    .operations-rail { border-left:1px solid #e5e7eb; overflow:auto; max-height:680px; }
+    .operations-head { padding:18px 20px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
+    .operations-head h2 { margin:0; font-size:16px; font-weight:700; }
+    .live-dot { width:8px; height:8px; border-radius:50%; background:#16a34a; display:inline-block; margin-right:7px; }
+    .session-card { padding:18px 20px; border-bottom:1px solid #e5e7eb; }
+    .session-card.is-emergency { border-left:4px solid #dc2626; }
+    .session-title { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    .session-title strong { display:block; font-size:14px; }
+    .session-title small, .session-meta { color:#64748b; font-size:12px; }
+    .badge { padding:3px 7px; border-radius:4px; font-size:11px; font-weight:700; background:#dcfce7; color:#166534; }
+    .badge.danger { background:#fee2e2; color:#991b1b; }
+    .session-meta { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:12px; }
+    .agency-select { width:100%; min-height:86px; border:1px solid #cbd5e1; border-radius:6px; padding:7px; background:#fff; color:#0f172a; }
+    .assign-button { width:100%; margin-top:8px; border:0; border-radius:6px; padding:9px 12px; background:#0f62fe; color:white; font-weight:700; cursor:pointer; }
+    .empty-state { padding:48px 24px; text-align:center; color:#64748b; }
+    .leaflet-popup-content strong { font-size:14px; }
+    @media (max-width: 900px) { .operations-shell { grid-template-columns:1fr; } #operations-map { min-height:440px; } .operations-rail { border-left:0; border-top:1px solid #e5e7eb; max-height:none; } }
+    .dark .operations-shell, .dark .agency-select { background:#111827; color:#e5e7eb; border-color:#374151; }
+    .dark .operations-rail, .dark .operations-head, .dark .session-card { border-color:#374151; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="operations-shell">
+    <div id="operations-map" aria-label="Live tracking map"></div>
+    <aside class="operations-rail">
+      <div class="operations-head">
+        <h2><span class="live-dot"></span>Active tracking</h2>
+        <span id="session-count">0 users</span>
+      </div>
+      <div id="session-list"><div class="empty-state">Loading active sessions...</div></div>
+    </aside>
+  </div>
+{% endblock %}
+
+{% block footer %}
+  {{ block.super }}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    const map = L.map('operations-map', { zoomControl: true }).setView([9.082, 8.6753], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const markers = new Map();
+    const organizations = [
+      {% for organization in organizations %}{ id: {{ organization.id }}, name: '{{ organization.name|escapejs }}' },{% endfor %}
+    ];
+
+    function escapeHtml(value) {
+      const node = document.createElement('div');
+      node.textContent = value ?? '';
+      return node.innerHTML;
+    }
+
+    function renderSessions(sessions) {
+      const list = document.getElementById('session-list');
+      document.getElementById('session-count').textContent = `${sessions.length} user${sessions.length === 1 ? '' : 's'}`;
+      list.innerHTML = sessions.length ? '' : '<div class="empty-state">No active tracking sessions.</div>';
+      const activeIds = new Set();
+
+      sessions.forEach(session => {
+        activeIds.add(session.id);
+        const assignedIds = new Set(session.organizations.map(item => item.id));
+        const options = organizations.map(org => `<option value="${org.id}" ${assignedIds.has(org.id) ? 'selected' : ''}>${escapeHtml(org.name)}</option>`).join('');
+        const card = document.createElement('section');
+        card.className = `session-card ${session.emergency ? 'is-emergency' : ''}`;
+        card.innerHTML = `
+          <div class="session-title"><div><strong>${escapeHtml(session.user)}</strong><small>@${escapeHtml(session.username)} · Session ${session.id}</small></div><span class="badge ${session.emergency ? 'danger' : ''}">${session.emergency ? 'SOS' : 'ACTIVE'}</span></div>
+          <div class="session-meta"><span>Accuracy: ${session.accuracy ?? '—'} m</span><span>Speed: ${session.speed ?? '—'} m/s</span><span>Heading: ${session.heading ?? '—'}°</span><span>${new Date(session.updated_at).toLocaleTimeString()}</span></div>
+          <form method="post" action="{{ assign_url }}">{% csrf_token %}<input type="hidden" name="session_id" value="${session.id}"><label><strong>Monitoring agencies</strong></label><select class="agency-select" name="organization_ids" multiple>${options}</select><button class="assign-button" type="submit">Update assignment</button></form>`;
+        list.appendChild(card);
+
+        if (session.latitude !== null && session.longitude !== null) {
+          const point = [session.latitude, session.longitude];
+          const popup = `<strong>${escapeHtml(session.user)}</strong><br>Session ${session.id}${session.emergency ? '<br><b>SOS active</b>' : ''}`;
+          if (markers.has(session.id)) markers.get(session.id).setLatLng(point).setPopupContent(popup);
+          else markers.set(session.id, L.marker(point).addTo(map).bindPopup(popup));
+        }
+      });
+
+      markers.forEach((marker, id) => { if (!activeIds.has(id)) { map.removeLayer(marker); markers.delete(id); } });
+      const located = sessions.filter(item => item.latitude !== null && item.longitude !== null);
+      if (located.length && !map._navigoFitted) {
+        map.fitBounds(located.map(item => [item.latitude, item.longitude]), { padding: [36, 36], maxZoom: 15 });
+        map._navigoFitted = true;
+      }
+    }
+
+    async function refreshSessions() {
+      try {
+        const response = await fetch('{{ data_url }}', { credentials: 'same-origin' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        renderSessions((await response.json()).sessions);
+      } catch (error) {
+        document.getElementById('session-list').innerHTML = '<div class="empty-state">Unable to refresh live sessions.</div>';
+      }
+    }
+
+    refreshSessions();
+    setInterval(refreshSessions, 5000);
+  </script>
+{% endblock %}

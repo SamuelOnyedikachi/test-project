@@ -1,10 +1,13 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import Geofence, GeofenceEvent
 
 
 @admin.register(Geofence)
-class GeofenceAdmin(admin.ModelAdmin):
+class GeofenceAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = ("id", "name", "zone_type", "owner", "radius_meters", "is_public", "is_active")
     list_filter = ("zone_type", "is_public", "is_active")
     list_editable = ("zone_type", "radius_meters", "is_public", "is_active")
@@ -17,7 +20,8 @@ class GeofenceAdmin(admin.ModelAdmin):
 
 
 @admin.register(GeofenceEvent)
-class GeofenceEventAdmin(admin.ModelAdmin):
+class GeofenceEventAdmin(ModelAdmin):
+    compressed_fields = True
     list_display = ("id", "geofence", "user", "event_type", "occurred_at")
     list_filter = ("event_type", "occurred_at")
     search_fields = ("geofence__name", "user__username")

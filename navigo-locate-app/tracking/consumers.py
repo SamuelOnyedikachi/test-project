@@ -3,6 +3,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
 from .models import TrackingSession
+from .access import sessions_visible_to
 from .realtime import tracking_group_name
 
 
@@ -37,7 +38,4 @@ class TrackingConsumer(AsyncJsonWebsocketConsumer):
         if not self.user or not self.user.is_authenticated:
             return False
 
-        return TrackingSession.objects.filter(
-            id=self.session_id,
-            user=self.user,
-        ).exists()
+        return sessions_visible_to(self.user).filter(id=self.session_id).exists()

@@ -13,6 +13,11 @@ class TrackingSession(models.Model):
         on_delete=models.CASCADE,
         related_name="tracking_sessions",
     )
+    assigned_organizations = models.ManyToManyField(
+        "organizations.Organization",
+        related_name="monitored_tracking_sessions",
+        blank=True,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

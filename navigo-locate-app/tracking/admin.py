@@ -4,12 +4,15 @@ from django.contrib import admin
 from django.contrib.auth.hashers import make_password
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from unfold.admin import ModelAdmin
 
 from .models import DeveloperApiKey, LocationViewAudit, RoutePoint, TrackingSession
 
 
 @admin.register(TrackingSession)
-class TrackingSessionAdmin(admin.ModelAdmin):
+class TrackingSessionAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = (
         "id",
         "user",
@@ -23,12 +26,14 @@ class TrackingSessionAdmin(admin.ModelAdmin):
     list_editable = ("status",)
     search_fields = ("user__username", "user__email", "user__phone")
     readonly_fields = ("started_at", "ended_at", "updated_at")
+    filter_horizontal = ("assigned_organizations",)
     fieldsets = (
         (
             "Session",
             {
                 "fields": (
                     "user",
+                    "assigned_organizations",
                     "status",
                     "emergency",
                     "public_share_token",
@@ -54,7 +59,8 @@ class TrackingSessionAdmin(admin.ModelAdmin):
 
 
 @admin.register(RoutePoint)
-class RoutePointAdmin(admin.ModelAdmin):
+class RoutePointAdmin(ModelAdmin):
+    compressed_fields = True
     list_display = (
         "id",
         "session",
@@ -92,7 +98,8 @@ class RoutePointAdmin(admin.ModelAdmin):
 
 
 @admin.register(LocationViewAudit)
-class LocationViewAuditAdmin(admin.ModelAdmin):
+class LocationViewAuditAdmin(ModelAdmin):
+    compressed_fields = True
     list_display = ("id", "session", "viewer", "api_key_name", "ip_address", "viewed_at")
     list_filter = ("viewed_at",)
     search_fields = ("viewer__username", "api_key_name", "ip_address")
@@ -100,7 +107,9 @@ class LocationViewAuditAdmin(admin.ModelAdmin):
 
 
 @admin.register(DeveloperApiKey)
-class DeveloperApiKeyAdmin(admin.ModelAdmin):
+class DeveloperApiKeyAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
     list_display = (
         "id",
         "owner",
