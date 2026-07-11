@@ -1,4 +1,5 @@
 from django.db.models import Q
+from organizations.models import OrganizationMember
 
 from .models import TrackingSession
 
@@ -14,5 +15,8 @@ def sessions_visible_to(user):
         | Q(
             assigned_organizations__members__user=user,
             assigned_organizations__members__is_active=True,
+            assigned_organizations__members__role__in=(
+                OrganizationMember.OPERATIONAL_ROLES
+            ),
         )
     ).distinct()

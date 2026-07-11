@@ -41,6 +41,13 @@ class OrganizationMember(models.Model):
         RESPONDER = "responder", "Responder"
         MEMBER = "member", "Member"
 
+    OPERATIONAL_ROLES = (
+        Role.OWNER,
+        Role.ADMIN,
+        Role.DISPATCHER,
+        Role.RESPONDER,
+    )
+
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
