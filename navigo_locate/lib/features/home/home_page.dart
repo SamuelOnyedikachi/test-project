@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/router.dart';
+import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../shared/widgets/info_card.dart';
 import '../contacts/contacts_provider.dart';
@@ -20,7 +21,23 @@ class HomePage extends StatelessWidget {
         return Scaffold(
           backgroundColor: AppColors.lightGrey,
           appBar: AppBar(
-            title: const Text('Navigo Locate'),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: Image.asset(
+                    AppAssets.logo,
+                    width: 42,
+                    height: 30,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text('NaviGo-Locate'),
+              ],
+            ),
             actions: [
               IconButton(
                 onPressed: () =>

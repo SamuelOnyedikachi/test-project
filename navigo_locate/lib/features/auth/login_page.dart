@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app/router.dart';
+import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../devices/device_registration_service.dart';
 import 'auth_service.dart';
@@ -45,10 +46,16 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.location_on_rounded,
-                      size: 64,
-                      color: AppColors.primary,
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        AppAssets.logo,
+                        width: 152,
+                        height: 96,
+                        fit: BoxFit.cover,
+                        filterQuality: FilterQuality.high,
+                        semanticLabel: 'NaviGo-Locate logo',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     const Text(

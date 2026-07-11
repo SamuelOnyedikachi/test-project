@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import 'auth_service.dart';
 
@@ -69,10 +70,16 @@ class _RegisterPageState extends State<RegisterPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.shield_rounded,
-                        size: 60,
-                        color: AppColors.primary,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          AppAssets.logo,
+                          width: 152,
+                          height: 96,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.high,
+                          semanticLabel: 'NaviGo-Locate logo',
+                        ),
                       ),
                       const SizedBox(height: 12),
                       const Text(
