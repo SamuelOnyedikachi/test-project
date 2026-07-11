@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="max-w-4xl">
+    <div class="rounded-lg border border-green-200 bg-white p-8 shadow-sm dark:border-green-900 dark:bg-gray-900">
+        <div class="mb-6">
+            <p class="mb-2 text-sm font-semibold uppercase tracking-wide text-green-600">
+                Developer credential created
+            </p>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                Copy this API key now
+            </h1>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                For security, Navigo stores only a hashed version. This full key will not be shown again.
+            </p>
+        </div>
+
+        <label class="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+            API Key for {{ object.name }}
+        </label>
+        <div class="flex flex-col gap-3 md:flex-row">
+            <input
+                id="generated-api-key"
+                class="w-full rounded-md border border-gray-300 bg-gray-50 px-4 py-3 font-mono text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                readonly
+                value="{{ raw_key }}"
+            />
+            <button
+                type="button"
+                class="rounded-md bg-primary-600 px-5 py-3 text-sm font-semibold text-white hover:bg-primary-700"
+                onclick="navigator.clipboard.writeText(document.getElementById('generated-api-key').value).then(() => { this.innerText = 'Copied'; })"
+            >
+                Copy Key
+            </button>
+        </div>
+
+        <div class="mt-6 rounded-md bg-gray-50 p-4 dark:bg-gray-800">
+            <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">Example usage</p>
+            <pre class="mt-2 overflow-x-auto text-xs text-gray-700 dark:text-gray-300">Authorization: Api-Key {{ raw_key }}</pre>
+        </div>
+
+        <div class="mt-8 flex flex-wrap gap-3">
+            <a class="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700" href="{{ change_url }}">
+                Configure key
+            </a>
+            <a class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800" href="{{ list_url }}">
+                Back to API keys
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

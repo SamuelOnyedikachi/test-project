@@ -1,0 +1,18 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+
+# Flutter and generated builds
+**/.dart_tool/
+**/build/
+
+# Editors and OS files
+.vscode/
+.idea/
+.DS_Store
