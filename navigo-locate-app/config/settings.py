@@ -297,6 +297,9 @@ SECURE_SSL_REDIRECT = config(
 SECURE_HSTS_SECONDS = config(
     'SECURE_HSTS_SECONDS', default=3600 if not DEBUG else 0, cast=int
 )
+SECURE_REFERRER_POLICY = config(
+    'SECURE_REFERRER_POLICY', default='strict-origin-when-cross-origin'
+)
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
