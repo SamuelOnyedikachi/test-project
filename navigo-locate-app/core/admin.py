@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
@@ -9,6 +10,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from unfold.admin import ModelAdmin
 from unfold.sites import UnfoldAdminSite
@@ -85,8 +87,12 @@ class NavigoAdminSite(UnfoldAdminSite):
         return TemplateResponse(request, "admin/live_tracking.html", context)
 
     def live_tracking_data(self, request):
+        fresh_after = timezone.now() - timedelta(minutes=5)
         sessions = (
-            TrackingSession.objects.filter(status=TrackingSession.Status.ACTIVE)
+            TrackingSession.objects.filter(
+                status=TrackingSession.Status.ACTIVE,
+                updated_at__gte=fresh_after,
+            )
             .select_related("user")
             .prefetch_related("assigned_organizations")
             .order_by("-emergency", "-updated_at")

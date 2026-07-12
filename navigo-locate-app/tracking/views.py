@@ -83,6 +83,17 @@ class StartTrackingView(APIView):
     def post(self, request):
         serializer = TrackingSessionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        previous_sessions = TrackingSession.objects.filter(
+            user=request.user,
+            status=TrackingSession.Status.ACTIVE,
+        )
+        for previous_session in previous_sessions:
+            previous_session.status = TrackingSession.Status.ENDED
+            previous_session.ended_at = timezone.now()
+            previous_session.save(
+                update_fields=["status", "ended_at", "updated_at"]
+            )
+            sync_cached_session_status(previous_session)
         session = serializer.save(user=request.user)
         return Response(
             TrackingSessionSerializer(session).data,

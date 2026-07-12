@@ -1,9 +1,11 @@
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from core.admin import navigo_admin_site
 from organizations.models import Organization, OrganizationMember
@@ -112,3 +114,29 @@ class LiveOperationsDataTests(TestCase):
         session.refresh_from_db()
         self.assertEqual(float(session.latest_latitude), 6.6018)
         self.assertEqual(float(session.latest_longitude), 3.3515)
+
+    def test_stale_active_session_is_not_returned_to_admin_map(self):
+        user = get_user_model().objects.create_user(username="stale-user")
+        session = TrackingSession.objects.create(user=user)
+        TrackingSession.objects.filter(pk=session.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=6)
+        )
+
+        response = navigo_admin_site.live_tracking_data(
+            RequestFactory().get("/admin/operations/live-tracking/data/")
+        )
+
+        self.assertEqual(json.loads(response.content)["sessions"], [])
+
+    def test_starting_session_ends_previous_active_session(self):
+        user = get_user_model().objects.create_user(username="restart-user")
+        previous_session = TrackingSession.objects.create(user=user)
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post("/api/v1/tracking/start/", {}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        previous_session.refresh_from_db()
+        self.assertEqual(previous_session.status, TrackingSession.Status.ENDED)
+        self.assertIsNotNone(previous_session.ended_at)
