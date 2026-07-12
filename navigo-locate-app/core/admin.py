@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -68,13 +70,16 @@ class NavigoAdminSite(UnfoldAdminSite):
         return custom_urls + super().get_urls()
 
     def live_tracking_view(self, request):
+        google_map_id = settings.GOOGLE_MAP_ID.strip()
+        if not re.fullmatch(r"[0-9a-fA-F]{16}", google_map_id):
+            google_map_id = ""
         context = {
             **self.each_context(request),
             "title": "Live Operations",
             "data_url": reverse("admin:live-tracking-data"),
             "assign_url": reverse("admin:live-tracking-assign"),
             "google_maps_web_api_key": settings.GOOGLE_MAPS_WEB_API_KEY,
-            "google_map_id": settings.GOOGLE_MAP_ID,
+            "google_map_id": google_map_id,
             "organizations": Organization.objects.order_by("name"),
         }
         return TemplateResponse(request, "admin/live_tracking.html", context)
