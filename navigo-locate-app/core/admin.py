@@ -1,4 +1,5 @@
 import json
+import math
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -142,7 +143,12 @@ class NavigoAdminSite(UnfoldAdminSite):
         ):
             return JsonResponse({"error": "The requested map area is too large."}, status=400)
 
-        bbox = f"{south:.5f},{west:.5f},{north:.5f},{east:.5f}"
+        grid_size = 0.01
+        south = math.floor(south / grid_size) * grid_size
+        west = math.floor(west / grid_size) * grid_size
+        north = math.ceil(north / grid_size) * grid_size
+        east = math.ceil(east / grid_size) * grid_size
+        bbox = f"{south:.2f},{west:.2f},{north:.2f},{east:.2f}"
         cache_key = f"admin:places:{bbox}"
         try:
             cached = cache.get(cache_key)
@@ -157,11 +163,11 @@ class NavigoAdminSite(UnfoldAdminSite):
             "school|college|university"
         )
         query = (
-            "[out:json][timeout:15];("
+            "[out:json][timeout:10];("
             f'nwr["amenity"~"^({amenities})$"]({bbox});'
             f'nwr["tourism"~"^(attraction|museum|gallery)$"]({bbox});'
             f'nwr["historic"]["name"]({bbox});'
-            ");out center 200;"
+            ");out center 150;"
         )
         url = "https://overpass-api.de/api/interpreter?" + urlencode({"data": query})
         overpass_request = Request(
@@ -172,7 +178,7 @@ class NavigoAdminSite(UnfoldAdminSite):
             },
         )
         try:
-            with urlopen(overpass_request, timeout=20) as response:
+            with urlopen(overpass_request, timeout=12) as response:
                 payload = json.load(response)
         except (URLError, TimeoutError, ValueError):
             return JsonResponse(
@@ -181,7 +187,7 @@ class NavigoAdminSite(UnfoldAdminSite):
             )
 
         try:
-            cache.set(cache_key, payload, timeout=60)
+            cache.set(cache_key, payload, timeout=900)
         except Exception:
             pass
         return JsonResponse(payload)
