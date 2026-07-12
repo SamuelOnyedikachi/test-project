@@ -12,6 +12,8 @@
     .map-tool { border:1px solid #cbd5e1; border-radius:6px; padding:8px 11px; background:#fff; color:#0f172a; box-shadow:0 1px 4px rgba(15,23,42,.16); cursor:pointer; font-size:12px; font-weight:700; }
     .map-tool.is-active { background:#0f62fe; border-color:#0f62fe; color:#fff; }
     .map-status { position:absolute; z-index:500; left:12px; bottom:24px; padding:7px 10px; border-radius:6px; background:rgba(15,23,42,.88); color:#fff; font-size:12px; pointer-events:none; }
+    .poi-label { background:rgba(255,255,255,.94); border:1px solid #cbd5e1; border-radius:4px; box-shadow:0 1px 3px rgba(15,23,42,.16); color:#0f172a; font-size:11px; font-weight:700; padding:3px 6px; }
+    .poi-label::before { display:none; }
     .operations-rail { border-left:1px solid #e5e7eb; overflow:auto; max-height:680px; }
     .operations-head { padding:18px 20px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
     .operations-head h2 { margin:0; font-size:16px; font-weight:700; }
@@ -44,6 +46,7 @@
       <div class="map-tools">
         <button class="map-tool" id="show-all" type="button">Show all users</button>
         <button class="map-tool" id="street-zoom" type="button">Street detail</button>
+        <button class="map-tool is-active" id="places-toggle" type="button">Places: on</button>
         <button class="map-tool" id="follow-toggle" type="button">Follow selected: off</button>
       </div>
       <div class="map-status" id="map-status">Street map · zoom in for buildings and landmarks</div>
@@ -90,11 +93,18 @@
       document.getElementById('map-status').textContent = zoom >= 17
         ? `Street detail level ${zoom} · buildings and nearby landmarks`
         : `Map zoom ${zoom} · use Street detail for road names and buildings`;
+      schedulePlaces();
     });
+    map.on('moveend', schedulePlaces);
 
     const markers = new Map();
     const trails = new Map();
     const trailPoints = new Map();
+    const poiLayer = L.layerGroup().addTo(map);
+    let placesEnabled = true;
+    let placesTimer = null;
+    let placesRequest = null;
+    let placesCacheKey = '';
     let selectedSessionId = null;
     let followSelected = false;
     let latestSessions = [];
@@ -106,6 +116,103 @@
       const node = document.createElement('div');
       node.textContent = value ?? '';
       return node.innerHTML;
+    }
+
+    const placeStyles = {
+      hospital: ['Hospital', '#dc2626'],
+      clinic: ['Clinic', '#e11d48'],
+      doctors: ['Doctor', '#e11d48'],
+      pharmacy: ['Pharmacy', '#16a34a'],
+      fuel: ['Fuel station', '#ea580c'],
+      police: ['Police', '#2563eb'],
+      fire_station: ['Fire station', '#b91c1c'],
+      townhall: ['Town hall', '#7c3aed'],
+      community_centre: ['Community hall', '#7c3aed'],
+      social_centre: ['Social centre', '#7c3aed'],
+      events_venue: ['Event hall', '#9333ea'],
+      conference_centre: ['Conference hall', '#9333ea'],
+      school: ['School', '#0891b2'],
+      college: ['College', '#0891b2'],
+      university: ['University', '#0891b2'],
+      attraction: ['Landmark', '#ca8a04'],
+      museum: ['Museum', '#ca8a04'],
+      gallery: ['Gallery', '#ca8a04'],
+      historic: ['Historic landmark', '#a16207']
+    };
+
+    function placeType(tags) {
+      if (tags.amenity) return tags.amenity;
+      if (tags.tourism) return tags.tourism;
+      if (tags.historic) return 'historic';
+      return 'attraction';
+    }
+
+    function schedulePlaces() {
+      clearTimeout(placesTimer);
+      placesTimer = setTimeout(loadVisiblePlaces, 650);
+    }
+
+    async function loadVisiblePlaces() {
+      if (!placesEnabled) return;
+      if (map.getZoom() < 14) {
+        poiLayer.clearLayers();
+        placesCacheKey = '';
+        document.getElementById('map-status').textContent = 'Zoom to level 14 or use Street detail to load nearby places.';
+        return;
+      }
+
+      const bounds = map.getBounds();
+      const bbox = [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()]
+        .map(value => value.toFixed(5)).join(',');
+      const cacheKey = `${map.getZoom()}:${bbox}`;
+      if (cacheKey === placesCacheKey) return;
+
+      placesRequest?.abort();
+      placesRequest = new AbortController();
+      document.getElementById('map-status').textContent = 'Loading hospitals, fuel stations, halls, and landmarks...';
+
+      try {
+        const response = await fetch(`{{ places_url }}?bbox=${encodeURIComponent(bbox)}`, {
+          signal: placesRequest.signal,
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        poiLayer.clearLayers();
+        let shown = 0;
+
+        data.elements.forEach(element => {
+          const latitude = element.lat ?? element.center?.lat;
+          const longitude = element.lon ?? element.center?.lon;
+          if (latitude == null || longitude == null) return;
+          const tags = element.tags || {};
+          const type = placeType(tags);
+          const style = placeStyles[type] || ['Landmark', '#ca8a04'];
+          const name = tags.name || style[0];
+          const marker = L.circleMarker([latitude, longitude], {
+            radius: 6,
+            color: '#fff',
+            weight: 2,
+            fillColor: style[1],
+            fillOpacity: .96
+          }).bindPopup(`<strong>${escapeHtml(name)}</strong><br>${escapeHtml(style[0])}`);
+          marker.bindTooltip(escapeHtml(name), {
+            permanent: map.getZoom() >= 15,
+            direction: 'top',
+            offset: [0, -7],
+            className: 'poi-label'
+          });
+          marker.addTo(poiLayer);
+          shown += 1;
+        });
+
+        placesCacheKey = cacheKey;
+        document.getElementById('map-status').textContent = `${shown} nearby places visible · zoom ${map.getZoom()}`;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        document.getElementById('map-status').textContent = 'Nearby places could not load; the street map remains available.';
+      }
     }
 
     function renderSessions(sessions) {
@@ -213,6 +320,19 @@
       if (selectedSessionId !== null) focusSession(selectedSessionId, followSelected);
       else map.setZoom(Math.max(map.getZoom(), 18));
     });
+    document.getElementById('places-toggle').addEventListener('click', event => {
+      placesEnabled = !placesEnabled;
+      event.currentTarget.classList.toggle('is-active', placesEnabled);
+      event.currentTarget.textContent = `Places: ${placesEnabled ? 'on' : 'off'}`;
+      if (placesEnabled) {
+        placesCacheKey = '';
+        schedulePlaces();
+      } else {
+        placesRequest?.abort();
+        poiLayer.clearLayers();
+        document.getElementById('map-status').textContent = 'Nearby places hidden';
+      }
+    });
     document.getElementById('follow-toggle').addEventListener('click', () => {
       if (selectedSessionId === null && latestSessions.length) selectedSessionId = latestSessions[0].id;
       followSelected = !followSelected;
@@ -232,6 +352,7 @@
 
     refreshSessions();
     setTimeout(() => map.invalidateSize(), 0);
+    schedulePlaces();
     setInterval(refreshSessions, 2000);
   </script>
 {% endblock %}

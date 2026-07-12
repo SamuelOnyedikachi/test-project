@@ -163,7 +163,6 @@ UNFOLD = {
     'SITE_HEADER': 'Navigo Command Center',
     'SITE_SUBHEADER': 'Realtime safety, tracking, and rescue operations',
     'SITE_ICON': lambda request: static('branding/logo.png'),
-    'SITE_LOGO': lambda request: static('branding/logo.png'),
     'SITE_FAVICONS': [
         {
             'rel': 'icon',
