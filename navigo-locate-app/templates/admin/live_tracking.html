@@ -3,7 +3,7 @@
 
 {% block extrahead %}
   {{ block.super }}
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
   <style>
     .operations-shell { display:grid; grid-template-columns:minmax(0,1fr) 360px; min-height:680px; border:1px solid #e5e7eb; background:#fff; }
     .map-stage { position:relative; min-width:0; }
@@ -60,7 +60,7 @@
 
 {% block footer %}
   {{ block.super }}
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
   <script>
     const map = L.map('operations-map', {
       zoomControl: true,
@@ -74,7 +74,23 @@
       keepBuffer: 4,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
+    let streetTilesReady = false;
+    streetLayer.on('tileload', () => {
+      if (streetTilesReady) return;
+      streetTilesReady = true;
+      document.getElementById('map-status').textContent = 'Street map ready · zoom in for names, buildings, and landmarks';
+    });
+    streetLayer.on('tileerror', () => {
+      document.getElementById('map-status').textContent = 'Street tiles could not load. Check network access to tile.openstreetmap.org.';
+    });
     L.control.scale({ imperial: false }).addTo(map);
+    map.on('zoomend', () => {
+      if (followSelected) return;
+      const zoom = map.getZoom();
+      document.getElementById('map-status').textContent = zoom >= 17
+        ? `Street detail level ${zoom} · buildings and nearby landmarks`
+        : `Map zoom ${zoom} · use Street detail for road names and buildings`;
+    });
 
     const markers = new Map();
     const trails = new Map();

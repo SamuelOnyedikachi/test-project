@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 from decouple import config
+from django.templatetags.static import static
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -147,6 +148,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -160,6 +162,15 @@ UNFOLD = {
     'SITE_TITLE': 'Navigo Locate',
     'SITE_HEADER': 'Navigo Command Center',
     'SITE_SUBHEADER': 'Realtime safety, tracking, and rescue operations',
+    'SITE_ICON': lambda request: static('branding/logo.png'),
+    'SITE_LOGO': lambda request: static('branding/logo.png'),
+    'SITE_FAVICONS': [
+        {
+            'rel': 'icon',
+            'type': 'image/png',
+            'href': lambda request: static('branding/logo.png'),
+        },
+    ],
     'SITE_SYMBOL': 'shield',
     'SHOW_HISTORY': True,
     'SHOW_VIEW_ON_SITE': False,
