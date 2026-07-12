@@ -43,7 +43,7 @@
         <button class="map-tool" id="show-all" type="button">Show all users</button>
         <button class="map-tool" id="street-zoom" type="button">Street detail</button>
         <button class="map-tool is-active" id="map-mode" type="button">Hybrid</button>
-        <button class="map-tool" id="follow-toggle" type="button">Follow selected: off</button>
+        <button class="map-tool is-active" id="follow-toggle" type="button">Follow selected: waiting</button>
       </div>
       <div class="map-status" id="map-status">Loading Google Maps...</div>
     </div>
@@ -66,9 +66,10 @@
     const trailPoints = new Map();
     const infoWindows = new Map();
     let selectedSessionId = null;
-    let followSelected = false;
+    let followSelected = true;
     let latestSessions = [];
     let refreshTimer = null;
+    let refreshInFlight = false;
     const organizations = [
       {% for organization in organizations %}{ id: {{ organization.id }}, name: '{{ organization.name|escapejs }}' },{% endfor %}
     ];
@@ -81,6 +82,12 @@
 
     function renderSessions(sessions) {
       latestSessions = sessions;
+      const located = sessions.filter(item => item.latitude !== null && item.longitude !== null);
+      if (selectedSessionId === null && located.length) selectedSessionId = located[0].id;
+      if (selectedSessionId !== null && !located.some(item => item.id === selectedSessionId)) {
+        selectedSessionId = located.length ? located[0].id : null;
+      }
+      updateFollowButton();
       const list = document.getElementById('session-list');
       document.getElementById('session-count').textContent = `${sessions.length} user${sessions.length === 1 ? '' : 's'}`;
       list.innerHTML = sessions.length ? '' : '<div class="empty-state">No active tracking sessions.</div>';
@@ -124,6 +131,7 @@
             const infoWindow = new google.maps.InfoWindow({ content: popup });
             marker.addListener('click', () => {
               selectedSessionId = session.id;
+              followSelected = true;
               infoWindow.open({ map, anchor: marker });
               updateFollowButton();
             });
@@ -166,7 +174,6 @@
           if (selectedSessionId === id) { selectedSessionId = null; followSelected = false; updateFollowButton(); }
         }
       });
-      const located = sessions.filter(item => item.latitude !== null && item.longitude !== null);
       if (located.length && !map._navigoFitted) {
         fitSessions(located, 15);
         map._navigoFitted = true;
@@ -197,7 +204,9 @@
     function updateFollowButton() {
       const button = document.getElementById('follow-toggle');
       button.classList.toggle('is-active', followSelected);
-      button.textContent = `Follow selected: ${followSelected ? 'on' : 'off'}`;
+      button.textContent = selectedSessionId === null && followSelected
+        ? 'Follow selected: waiting'
+        : `Follow selected: ${followSelected ? 'on' : 'off'}`;
     }
 
     function showAllUsers() {
@@ -232,19 +241,27 @@
         : 'Roadmap active · streets, buildings, landmarks, and Google places visible';
     });
     document.getElementById('follow-toggle').addEventListener('click', () => {
-      if (selectedSessionId === null && latestSessions.length) selectedSessionId = latestSessions[0].id;
+      if (selectedSessionId === null) {
+        selectedSessionId = latestSessions.find(
+          item => item.latitude !== null && item.longitude !== null
+        )?.id ?? null;
+      }
       followSelected = !followSelected;
       updateFollowButton();
       if (selectedSessionId !== null) focusSession(selectedSessionId, followSelected);
     });
 
     async function refreshSessions() {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
       try {
         const response = await fetch('{{ data_url }}', { credentials: 'same-origin' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         renderSessions((await response.json()).sessions);
       } catch (error) {
         document.getElementById('session-list').innerHTML = '<div class="empty-state">Unable to refresh live sessions.</div>';
+      } finally {
+        refreshInFlight = false;
       }
     }
 

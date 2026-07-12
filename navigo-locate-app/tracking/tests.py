@@ -1,10 +1,15 @@
-from django.contrib.auth import get_user_model
-from django.test import TestCase
+import json
 
+from django.contrib.auth import get_user_model
+from django.test import RequestFactory, TestCase
+from django.utils import timezone
+
+from core.admin import navigo_admin_site
 from organizations.models import Organization, OrganizationMember
 
 from .access import sessions_visible_to
 from .models import TrackingSession
+from .services import record_location_update
 
 
 class TrackingSessionAccessTests(TestCase):
@@ -49,3 +54,35 @@ class TrackingSessionAccessTests(TestCase):
         self.set_membership(OrganizationMember.Role.RESPONDER)
         self.session.assigned_organizations.clear()
         self.assertNotIn(self.session, sessions_visible_to(self.viewer))
+
+
+class LiveOperationsDataTests(TestCase):
+    def test_recorded_location_is_returned_to_admin_follow_map(self):
+        user = get_user_model().objects.create_user(
+            username="tracked-user",
+            full_name="Tracked User",
+        )
+        session = TrackingSession.objects.create(user=user)
+        record_location_update(
+            session,
+            {
+                "latitude": "6.5244000",
+                "longitude": "3.3792000",
+                "accuracy": 8.0,
+                "speed": 1.5,
+                "heading": 90.0,
+                "recorded_at": timezone.now(),
+            },
+            actor=user,
+        )
+
+        response = navigo_admin_site.live_tracking_data(
+            RequestFactory().get("/admin/operations/live-tracking/data/")
+        )
+        payload = json.loads(response.content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload["sessions"]), 1)
+        self.assertEqual(payload["sessions"][0]["id"], session.id)
+        self.assertEqual(payload["sessions"][0]["latitude"], 6.5244)
+        self.assertEqual(payload["sessions"][0]["longitude"], 3.3792)
