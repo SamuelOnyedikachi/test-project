@@ -3,7 +3,6 @@
 
 {% block extrahead %}
   {{ block.super }}
-  <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
   <style>
     .operations-shell { display:grid; grid-template-columns:minmax(0,1fr) 360px; min-height:680px; border:1px solid #e5e7eb; background:#fff; }
     .map-stage { position:relative; min-width:0; }
@@ -12,8 +11,6 @@
     .map-tool { border:1px solid #cbd5e1; border-radius:6px; padding:8px 11px; background:#fff; color:#0f172a; box-shadow:0 1px 4px rgba(15,23,42,.16); cursor:pointer; font-size:12px; font-weight:700; }
     .map-tool.is-active { background:#0f62fe; border-color:#0f62fe; color:#fff; }
     .map-status { position:absolute; z-index:500; left:12px; bottom:24px; padding:7px 10px; border-radius:6px; background:rgba(15,23,42,.88); color:#fff; font-size:12px; pointer-events:none; }
-    .poi-label { background:rgba(255,255,255,.94); border:1px solid #cbd5e1; border-radius:4px; box-shadow:0 1px 3px rgba(15,23,42,.16); color:#0f172a; font-size:11px; font-weight:700; padding:3px 6px; }
-    .poi-label::before { display:none; }
     .operations-rail { border-left:1px solid #e5e7eb; overflow:auto; max-height:680px; }
     .operations-head { padding:18px 20px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
     .operations-head h2 { margin:0; font-size:16px; font-weight:700; }
@@ -32,7 +29,6 @@
     .session-action { border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; background:#fff; color:#0f172a; cursor:pointer; font-size:12px; font-weight:700; }
     .session-action.following { background:#dcfce7; border-color:#86efac; color:#166534; }
     .empty-state { padding:48px 24px; text-align:center; color:#64748b; }
-    .leaflet-popup-content strong { font-size:14px; }
     @media (max-width: 900px) { .operations-shell { grid-template-columns:1fr; } #operations-map { min-height:440px; } .operations-rail { border-left:0; border-top:1px solid #e5e7eb; max-height:none; } }
     .dark .operations-shell, .dark .agency-select, .dark .map-tool, .dark .session-action { background:#111827; color:#e5e7eb; border-color:#374151; }
     .dark .operations-rail, .dark .operations-head, .dark .session-card { border-color:#374151; }
@@ -46,11 +42,10 @@
       <div class="map-tools">
         <button class="map-tool" id="show-all" type="button">Show all users</button>
         <button class="map-tool" id="street-zoom" type="button">Street detail</button>
-        <button class="map-tool" id="map-mode" type="button">Satellite</button>
-        <button class="map-tool is-active" id="places-toggle" type="button">Places: on</button>
+        <button class="map-tool is-active" id="map-mode" type="button">Hybrid</button>
         <button class="map-tool" id="follow-toggle" type="button">Follow selected: off</button>
       </div>
-      <div class="map-status" id="map-status">Street map · zoom in for buildings and landmarks</div>
+      <div class="map-status" id="map-status">Loading Google Maps...</div>
     </div>
     <aside class="operations-rail">
       <div class="operations-head">
@@ -64,75 +59,16 @@
 
 {% block footer %}
   {{ block.super }}
-  <script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
   <script>
-    const map = L.map('operations-map', {
-      zoomControl: true,
-      zoomSnap: 1,
-      zoomDelta: 1,
-      maxZoom: 20
-    }).setView([9.082, 8.6753], 6);
-    const streetLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxNativeZoom: 19,
-      maxZoom: 20,
-      keepBuffer: 4,
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
-    const satelliteLayer = L.tileLayer(
-      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      {
-        maxNativeZoom: 19,
-        maxZoom: 20,
-        keepBuffer: 4,
-        updateWhenIdle: true,
-        updateWhenZooming: false,
-        attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community'
-      }
-    );
-    let satelliteMode = false;
-    let streetTilesReady = false;
-    streetLayer.on('tileload', () => {
-      if (streetTilesReady) return;
-      streetTilesReady = true;
-      document.getElementById('map-status').textContent = 'Street map ready · zoom in for names, buildings, and landmarks';
-    });
-    streetLayer.on('tileerror', () => {
-      document.getElementById('map-status').textContent = 'Street tiles could not load. Check network access to tile.openstreetmap.org.';
-    });
-    satelliteLayer.on('tileerror', () => {
-      if (!satelliteMode) return;
-      satelliteMode = false;
-      map.removeLayer(satelliteLayer);
-      streetLayer.addTo(map);
-      const modeButton = document.getElementById('map-mode');
-      modeButton.classList.remove('is-active');
-      modeButton.textContent = 'Satellite';
-      document.getElementById('map-status').textContent = 'Satellite imagery is unavailable. Street map restored.';
-    });
-    L.control.scale({ imperial: false }).addTo(map);
-    map.on('zoomend', () => {
-      if (followSelected) return;
-      const zoom = map.getZoom();
-      document.getElementById('map-status').textContent = zoom >= 17
-        ? `Street detail level ${zoom} · buildings and nearby landmarks`
-        : `Map zoom ${zoom} · use Street detail for road names and buildings`;
-      schedulePlaces();
-    });
-    map.on('moveend', schedulePlaces);
-
+    let map = null;
     const markers = new Map();
     const trails = new Map();
     const trailPoints = new Map();
-    const poiLayer = L.layerGroup().addTo(map);
-    let placesEnabled = true;
-    let placesTimer = null;
-    let placesRequest = null;
-    let placesCacheKey = '';
+    const infoWindows = new Map();
     let selectedSessionId = null;
     let followSelected = false;
     let latestSessions = [];
+    let refreshTimer = null;
     const organizations = [
       {% for organization in organizations %}{ id: {{ organization.id }}, name: '{{ organization.name|escapejs }}' },{% endfor %}
     ];
@@ -141,108 +77,6 @@
       const node = document.createElement('div');
       node.textContent = value ?? '';
       return node.innerHTML;
-    }
-
-    const placeStyles = {
-      hospital: ['Hospital', '#dc2626'],
-      clinic: ['Clinic', '#e11d48'],
-      doctors: ['Doctor', '#e11d48'],
-      pharmacy: ['Pharmacy', '#16a34a'],
-      fuel: ['Fuel station', '#ea580c'],
-      police: ['Police', '#2563eb'],
-      fire_station: ['Fire station', '#b91c1c'],
-      townhall: ['Town hall', '#7c3aed'],
-      community_centre: ['Community hall', '#7c3aed'],
-      social_centre: ['Social centre', '#7c3aed'],
-      events_venue: ['Event hall', '#9333ea'],
-      conference_centre: ['Conference hall', '#9333ea'],
-      school: ['School', '#0891b2'],
-      college: ['College', '#0891b2'],
-      university: ['University', '#0891b2'],
-      attraction: ['Landmark', '#ca8a04'],
-      museum: ['Museum', '#ca8a04'],
-      gallery: ['Gallery', '#ca8a04'],
-      historic: ['Historic landmark', '#a16207']
-    };
-
-    function placeType(tags) {
-      if (tags.amenity) return tags.amenity;
-      if (tags.tourism) return tags.tourism;
-      if (tags.historic) return 'historic';
-      return 'attraction';
-    }
-
-    function schedulePlaces() {
-      clearTimeout(placesTimer);
-      placesTimer = setTimeout(loadVisiblePlaces, 350);
-    }
-
-    async function loadVisiblePlaces() {
-      if (!placesEnabled) return;
-      if (map.getZoom() < 14) {
-        poiLayer.clearLayers();
-        placesCacheKey = '';
-        document.getElementById('map-status').textContent = 'Zoom to level 14 or use Street detail to load nearby places.';
-        return;
-      }
-
-      const bounds = map.getBounds();
-      const gridSize = .01;
-      const bbox = [
-        Math.floor(bounds.getSouth() / gridSize) * gridSize,
-        Math.floor(bounds.getWest() / gridSize) * gridSize,
-        Math.ceil(bounds.getNorth() / gridSize) * gridSize,
-        Math.ceil(bounds.getEast() / gridSize) * gridSize
-      ].map(value => value.toFixed(2)).join(',');
-      const cacheKey = bbox;
-      if (cacheKey === placesCacheKey) return;
-
-      placesRequest?.abort();
-      placesRequest = new AbortController();
-      document.getElementById('map-status').textContent = 'Loading hospitals, fuel stations, halls, and landmarks...';
-
-      try {
-        const response = await fetch(`{{ places_url }}?bbox=${encodeURIComponent(bbox)}`, {
-          signal: placesRequest.signal,
-          credentials: 'same-origin',
-          headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        poiLayer.clearLayers();
-        let shown = 0;
-
-        data.elements.forEach(element => {
-          const latitude = element.lat ?? element.center?.lat;
-          const longitude = element.lon ?? element.center?.lon;
-          if (latitude == null || longitude == null) return;
-          const tags = element.tags || {};
-          const type = placeType(tags);
-          const style = placeStyles[type] || ['Landmark', '#ca8a04'];
-          const name = tags.name || style[0];
-          const marker = L.circleMarker([latitude, longitude], {
-            radius: 6,
-            color: '#fff',
-            weight: 2,
-            fillColor: style[1],
-            fillOpacity: .96
-          }).bindPopup(`<strong>${escapeHtml(name)}</strong><br>${escapeHtml(style[0])}`);
-          marker.bindTooltip(escapeHtml(name), {
-            permanent: map.getZoom() >= 15,
-            direction: 'top',
-            offset: [0, -7],
-            className: 'poi-label'
-          });
-          marker.addTo(poiLayer);
-          shown += 1;
-        });
-
-        placesCacheKey = cacheKey;
-        document.getElementById('map-status').textContent = `${shown} nearby places visible · zoom ${map.getZoom()}`;
-      } catch (error) {
-        if (error.name === 'AbortError') return;
-        document.getElementById('map-status').textContent = 'Nearby places could not load; the street map remains available.';
-      }
     }
 
     function renderSessions(sessions) {
@@ -268,28 +102,53 @@
         list.appendChild(card);
 
         if (session.latitude !== null && session.longitude !== null) {
-          const point = [session.latitude, session.longitude];
+          const point = { lat: session.latitude, lng: session.longitude };
           const popup = `<strong>${escapeHtml(session.user)}</strong><br>Session ${session.id}${session.emergency ? '<br><b>SOS active</b>' : ''}`;
           if (markers.has(session.id)) {
-            markers.get(session.id).setLatLng(point).setPopupContent(popup);
+            markers.get(session.id).setPosition(point);
+            infoWindows.get(session.id).setContent(popup);
           } else {
-            const marker = L.marker(point, { title: session.user }).addTo(map).bindPopup(popup);
-            marker.on('click', () => { selectedSessionId = session.id; updateFollowButton(); });
+            const marker = new google.maps.Marker({
+              position: point,
+              map,
+              title: session.user,
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: session.emergency ? 10 : 8,
+                fillColor: session.emergency ? '#dc2626' : '#0f62fe',
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 3
+              }
+            });
+            const infoWindow = new google.maps.InfoWindow({ content: popup });
+            marker.addListener('click', () => {
+              selectedSessionId = session.id;
+              infoWindow.open({ map, anchor: marker });
+              updateFollowButton();
+            });
             markers.set(session.id, marker);
+            infoWindows.set(session.id, infoWindow);
           }
 
           const points = trailPoints.get(session.id) || [];
           const last = points[points.length - 1];
-          if (!last || last[0] !== point[0] || last[1] !== point[1]) {
+          if (!last || last.lat !== point.lat || last.lng !== point.lng) {
             points.push(point);
             if (points.length > 30) points.shift();
             trailPoints.set(session.id, points);
-            if (trails.has(session.id)) trails.get(session.id).setLatLngs(points);
-            else trails.set(session.id, L.polyline(points, { color: session.emergency ? '#dc2626' : '#0f62fe', weight: 4, opacity: .72 }).addTo(map));
+            if (trails.has(session.id)) trails.get(session.id).setPath(points);
+            else trails.set(session.id, new google.maps.Polyline({
+              path: points,
+              map,
+              strokeColor: session.emergency ? '#dc2626' : '#0f62fe',
+              strokeOpacity: .78,
+              strokeWeight: 4
+            }));
           }
 
           if (followSelected && selectedSessionId === session.id) {
-            map.panTo(point, { animate: true, duration: .7 });
+            map.panTo(point);
             document.getElementById('map-status').textContent = `Following ${session.user} · updated ${new Date(session.updated_at).toLocaleTimeString()}`;
           }
         }
@@ -297,9 +156,11 @@
 
       markers.forEach((marker, id) => {
         if (!activeIds.has(id)) {
-          map.removeLayer(marker);
+          marker.setMap(null);
           markers.delete(id);
-          if (trails.has(id)) map.removeLayer(trails.get(id));
+          infoWindows.get(id)?.close();
+          infoWindows.delete(id);
+          if (trails.has(id)) trails.get(id).setMap(null);
           trails.delete(id);
           trailPoints.delete(id);
           if (selectedSessionId === id) { selectedSessionId = null; followSelected = false; updateFollowButton(); }
@@ -307,7 +168,7 @@
       });
       const located = sessions.filter(item => item.latitude !== null && item.longitude !== null);
       if (located.length && !map._navigoFitted) {
-        map.fitBounds(located.map(item => [item.latitude, item.longitude]), { padding: [36, 36], maxZoom: 15 });
+        fitSessions(located, 15);
         map._navigoFitted = true;
       }
     }
@@ -324,8 +185,10 @@
       }
       selectedSessionId = sessionId;
       followSelected = follow;
-      map.flyTo([session.latitude, session.longitude], 18, { animate: true, duration: 1 });
-      markers.get(sessionId)?.openPopup();
+      map.panTo({ lat: session.latitude, lng: session.longitude });
+      map.setZoom(18);
+      const marker = markers.get(sessionId);
+      if (marker) infoWindows.get(sessionId)?.open({ map, anchor: marker });
       document.getElementById('map-status').textContent = `${follow ? 'Following' : 'Viewing'} ${session.user} · street and building detail`;
       updateFollowButton();
       renderSessions(latestSessions);
@@ -341,8 +204,17 @@
       const located = latestSessions.filter(item => item.latitude !== null && item.longitude !== null);
       followSelected = false;
       updateFollowButton();
-      if (located.length) map.fitBounds(located.map(item => [item.latitude, item.longitude]), { padding: [48, 48], maxZoom: 16 });
+      if (located.length) fitSessions(located, 16);
       document.getElementById('map-status').textContent = 'Showing all active users';
+    }
+
+    function fitSessions(sessions, maxZoom) {
+      const bounds = new google.maps.LatLngBounds();
+      sessions.forEach(session => bounds.extend({ lat: session.latitude, lng: session.longitude }));
+      map.fitBounds(bounds, 48);
+      google.maps.event.addListenerOnce(map, 'idle', () => {
+        if (map.getZoom() > maxZoom) map.setZoom(maxZoom);
+      });
     }
 
     document.getElementById('show-all').addEventListener('click', showAllUsers);
@@ -351,32 +223,13 @@
       else map.setZoom(Math.max(map.getZoom(), 18));
     });
     document.getElementById('map-mode').addEventListener('click', event => {
-      satelliteMode = !satelliteMode;
-      if (satelliteMode) {
-        map.removeLayer(streetLayer);
-        satelliteLayer.addTo(map);
-      } else {
-        map.removeLayer(satelliteLayer);
-        streetLayer.addTo(map);
-      }
-      event.currentTarget.classList.toggle('is-active', satelliteMode);
-      event.currentTarget.textContent = satelliteMode ? 'Streets' : 'Satellite';
-      document.getElementById('map-status').textContent = satelliteMode
-        ? 'Satellite imagery active · live users and nearby places remain visible'
-        : 'Street map active · road and building labels visible';
-    });
-    document.getElementById('places-toggle').addEventListener('click', event => {
-      placesEnabled = !placesEnabled;
-      event.currentTarget.classList.toggle('is-active', placesEnabled);
-      event.currentTarget.textContent = `Places: ${placesEnabled ? 'on' : 'off'}`;
-      if (placesEnabled) {
-        placesCacheKey = '';
-        schedulePlaces();
-      } else {
-        placesRequest?.abort();
-        poiLayer.clearLayers();
-        document.getElementById('map-status').textContent = 'Nearby places hidden';
-      }
+      const hybrid = map.getMapTypeId() !== google.maps.MapTypeId.HYBRID;
+      map.setMapTypeId(hybrid ? google.maps.MapTypeId.HYBRID : google.maps.MapTypeId.ROADMAP);
+      event.currentTarget.classList.toggle('is-active', hybrid);
+      event.currentTarget.textContent = hybrid ? 'Hybrid' : 'Roadmap';
+      document.getElementById('map-status').textContent = hybrid
+        ? 'Hybrid imagery active · streets, landmarks, and Google places visible'
+        : 'Roadmap active · streets, buildings, landmarks, and Google places visible';
     });
     document.getElementById('follow-toggle').addEventListener('click', () => {
       if (selectedSessionId === null && latestSessions.length) selectedSessionId = latestSessions[0].id;
@@ -395,9 +248,46 @@
       }
     }
 
-    refreshSessions();
-    setTimeout(() => map.invalidateSize(), 0);
-    schedulePlaces();
-    setInterval(refreshSessions, 2000);
+    function initOperationsMap() {
+      const options = {
+        center: { lat: 9.082, lng: 8.6753 },
+        zoom: 6,
+        mapTypeId: google.maps.MapTypeId.HYBRID,
+        clickableIcons: true,
+        streetViewControl: true,
+        fullscreenControl: true,
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+          mapTypeIds: [
+            google.maps.MapTypeId.ROADMAP,
+            google.maps.MapTypeId.HYBRID,
+            google.maps.MapTypeId.SATELLITE,
+            google.maps.MapTypeId.TERRAIN
+          ]
+        }
+      };
+      {% if google_map_id %}options.mapId = '{{ google_map_id|escapejs }}';{% endif %}
+      map = new google.maps.Map(document.getElementById('operations-map'), options);
+      map.addListener('zoom_changed', () => {
+        if (followSelected) return;
+        const zoom = map.getZoom();
+        document.getElementById('map-status').textContent = zoom >= 17
+          ? `Google street detail level ${zoom} · buildings, landmarks, and places visible`
+          : `Google map zoom ${zoom} · zoom in for more place and street detail`;
+      });
+      document.getElementById('map-status').textContent = 'Google Hybrid map ready · streets, landmarks, and places visible';
+      refreshSessions();
+      refreshTimer = setInterval(refreshSessions, 2000);
+    }
+
+    window.gm_authFailure = () => {
+      clearInterval(refreshTimer);
+      document.getElementById('map-status').textContent = 'Google Maps authorization failed. Check the API key, APIs, billing, and website restrictions.';
+    };
   </script>
+  {% if google_maps_web_api_key %}
+    <script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_web_api_key|urlencode }}&callback=initOperationsMap&loading=async&v=weekly{% if google_map_id %}&map_ids={{ google_map_id|urlencode }}{% endif %}"></script>
+  {% else %}
+    <script>document.getElementById('map-status').textContent = 'Google Maps is not configured. Add GOOGLE_MAPS_WEB_API_KEY to the backend environment.';</script>
+  {% endif %}
 {% endblock %}

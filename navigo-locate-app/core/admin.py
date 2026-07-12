@@ -1,14 +1,8 @@
-import json
-import math
-from urllib.error import URLError
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
-
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.models import Group
-from django.core.cache import cache
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
@@ -66,11 +60,6 @@ class NavigoAdminSite(UnfoldAdminSite):
                 name="live-tracking-data",
             ),
             path(
-                "operations/live-tracking/places/",
-                self.admin_view(self.live_tracking_places),
-                name="live-tracking-places",
-            ),
-            path(
                 "operations/live-tracking/assign/",
                 self.admin_view(self.assign_tracking_organizations),
                 name="live-tracking-assign",
@@ -83,8 +72,9 @@ class NavigoAdminSite(UnfoldAdminSite):
             **self.each_context(request),
             "title": "Live Operations",
             "data_url": reverse("admin:live-tracking-data"),
-            "places_url": reverse("admin:live-tracking-places"),
             "assign_url": reverse("admin:live-tracking-assign"),
+            "google_maps_web_api_key": settings.GOOGLE_MAPS_WEB_API_KEY,
+            "google_map_id": settings.GOOGLE_MAP_ID,
             "organizations": Organization.objects.order_by("name"),
         }
         return TemplateResponse(request, "admin/live_tracking.html", context)
@@ -124,73 +114,6 @@ class NavigoAdminSite(UnfoldAdminSite):
                 ]
             }
         )
-
-    def live_tracking_places(self, request):
-        try:
-            south, west, north, east = [
-                float(value) for value in request.GET["bbox"].split(",")
-            ]
-        except (KeyError, TypeError, ValueError):
-            return JsonResponse({"error": "A valid bbox is required."}, status=400)
-
-        if (
-            south >= north
-            or west >= east
-            or north - south > 0.5
-            or east - west > 0.5
-            or not (-90 <= south <= 90 and -90 <= north <= 90)
-            or not (-180 <= west <= 180 and -180 <= east <= 180)
-        ):
-            return JsonResponse({"error": "The requested map area is too large."}, status=400)
-
-        grid_size = 0.01
-        south = math.floor(south / grid_size) * grid_size
-        west = math.floor(west / grid_size) * grid_size
-        north = math.ceil(north / grid_size) * grid_size
-        east = math.ceil(east / grid_size) * grid_size
-        bbox = f"{south:.2f},{west:.2f},{north:.2f},{east:.2f}"
-        cache_key = f"admin:places:{bbox}"
-        try:
-            cached = cache.get(cache_key)
-        except Exception:
-            cached = None
-        if cached is not None:
-            return JsonResponse(cached)
-
-        amenities = (
-            "fuel|hospital|clinic|doctors|pharmacy|townhall|community_centre|"
-            "social_centre|events_venue|conference_centre|police|fire_station|"
-            "school|college|university"
-        )
-        query = (
-            "[out:json][timeout:10];("
-            f'nwr["amenity"~"^({amenities})$"]({bbox});'
-            f'nwr["tourism"~"^(attraction|museum|gallery)$"]({bbox});'
-            f'nwr["historic"]["name"]({bbox});'
-            ");out center 150;"
-        )
-        url = "https://overpass-api.de/api/interpreter?" + urlencode({"data": query})
-        overpass_request = Request(
-            url,
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "NaviGo-Locate/1.0 (+https://navigo-locate-production.up.railway.app)",
-            },
-        )
-        try:
-            with urlopen(overpass_request, timeout=12) as response:
-                payload = json.load(response)
-        except (URLError, TimeoutError, ValueError):
-            return JsonResponse(
-                {"error": "Nearby places are temporarily unavailable."},
-                status=502,
-            )
-
-        try:
-            cache.set(cache_key, payload, timeout=900)
-        except Exception:
-            pass
-        return JsonResponse(payload)
 
     @require_POST
     def assign_tracking_organizations(self, request):

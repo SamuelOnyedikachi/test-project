@@ -110,6 +110,9 @@ else:
     }
 
 REDIS_URL = config('REDIS_URL', default='')
+GOOGLE_MAPS_WEB_API_KEY = config('GOOGLE_MAPS_WEB_API_KEY', default='')
+GOOGLE_MAPS_SERVER_API_KEY = config('GOOGLE_MAPS_SERVER_API_KEY', default='')
+GOOGLE_MAP_ID = config('GOOGLE_MAP_ID', default='')
 
 if REDIS_URL:
     CHANNEL_LAYERS = {
