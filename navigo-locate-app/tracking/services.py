@@ -1,3 +1,4 @@
+import logging
 import math
 
 from audit.models import AuditLog
@@ -9,6 +10,7 @@ from .models import RoutePoint
 from .realtime import broadcast_location_update
 
 LIVE_LOCATION_CACHE_TTL_SECONDS = 60 * 60 * 24
+logger = logging.getLogger(__name__)
 
 
 def record_location_update(session, validated_data, actor=None, request=None):
@@ -39,8 +41,14 @@ def record_location_update(session, validated_data, actor=None, request=None):
 
     _create_geofence_events(session, point)
     _create_audit_log(session, point, actor=actor, request=request)
-    cache_live_location(session, point)
-    broadcast_location_update(session, point)
+    try:
+        cache_live_location(session, point)
+    except Exception:
+        logger.exception("Unable to cache live location for session %s", session.id)
+    try:
+        broadcast_location_update(session, point)
+    except Exception:
+        logger.exception("Unable to broadcast live location for session %s", session.id)
     return point
 
 
@@ -73,7 +81,11 @@ def cache_live_location(session, point):
 
 
 def get_cached_live_location(session_id):
-    return cache.get(live_location_cache_key(session_id))
+    try:
+        return cache.get(live_location_cache_key(session_id))
+    except Exception:
+        logger.exception("Unable to read cached location for session %s", session_id)
+        return None
 
 
 def sync_cached_session_status(session):
@@ -85,11 +97,14 @@ def sync_cached_session_status(session):
     payload["session"]["updated_at"] = session.updated_at.isoformat()
     if session.ended_at:
         payload["session"]["ended_at"] = session.ended_at.isoformat()
-    cache.set(
-        live_location_cache_key(session.id),
-        payload,
-        timeout=LIVE_LOCATION_CACHE_TTL_SECONDS,
-    )
+    try:
+        cache.set(
+            live_location_cache_key(session.id),
+            payload,
+            timeout=LIVE_LOCATION_CACHE_TTL_SECONDS,
+        )
+    except Exception:
+        logger.exception("Unable to update cached status for session %s", session.id)
 
 
 def live_location_cache_key(session_id):

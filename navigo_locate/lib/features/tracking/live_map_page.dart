@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +6,7 @@ import '../../core/constants/app_colors.dart';
 import '../../models/destination_route.dart';
 import '../../models/location_snapshot.dart';
 import '../../models/trusted_contact.dart';
+import '../../services/google_maps_loader.dart';
 import '../contacts/contacts_provider.dart';
 import 'live_tracking_provider.dart';
 
@@ -91,22 +91,44 @@ class LiveMapPage extends StatelessWidget {
   }
 }
 
-class _MapSurface extends StatelessWidget {
+class _MapSurface extends StatefulWidget {
   const _MapSurface({required this.tracking});
 
   final LiveTrackingProvider tracking;
 
   @override
+  State<_MapSurface> createState() => _MapSurfaceState();
+}
+
+class _MapSurfaceState extends State<_MapSurface> {
+  GoogleMapController? _controller;
+  LatLng? _lastPosition;
+
+  @override
   Widget build(BuildContext context) {
-    final location = tracking.latestLocation;
-    final route = tracking.destinationRoute;
+    final location = widget.tracking.latestLocation;
+    final route = widget.tracking.destinationRoute;
     final target = location == null
         ? const LatLng(6.5244, 3.3792)
         : LatLng(location.latitude, location.longitude);
 
-    if (kIsWeb) {
-      return _WebMapFallback(tracking: tracking);
+    if (!googleMapsReady) {
+      return const ColoredBox(
+        color: Color(0xFFEFF4FF),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Google Maps is not configured for this web build. Add '
+              'GOOGLE_MAPS_WEB_API_KEY as a Flutter dart-define.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
     }
+
+    _moveToLatestPosition(target, location != null);
 
     return GoogleMap(
       initialCameraPosition: CameraPosition(
@@ -115,12 +137,19 @@ class _MapSurface extends StatelessWidget {
       ),
       myLocationButtonEnabled: true,
       myLocationEnabled: true,
+      mapType: MapType.hybrid,
+      onMapCreated: (controller) {
+        _controller = controller;
+        if (location != null) {
+          controller.animateCamera(CameraUpdate.newLatLngZoom(target, 17));
+        }
+      },
       markers: {
         Marker(
           markerId: const MarkerId('current-location'),
           position: target,
           infoWindow: InfoWindow(
-            title: tracking.isEmergency
+            title: widget.tracking.isEmergency
                 ? 'Emergency Location'
                 : 'Current Location',
           ),
@@ -146,88 +175,19 @@ class _MapSurface extends StatelessWidget {
       },
     );
   }
-}
 
-class _WebMapFallback extends StatelessWidget {
-  const _WebMapFallback({required this.tracking});
-
-  final LiveTrackingProvider tracking;
+  void _moveToLatestPosition(LatLng target, bool hasLocation) {
+    if (!hasLocation || _lastPosition == target) return;
+    _lastPosition = target;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller?.animateCamera(CameraUpdate.newLatLng(target));
+    });
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final location = tracking.latestLocation;
-    final route = tracking.destinationRoute;
-    final distance = location == null || route == null
-        ? null
-        : route.distanceFrom(location);
-
-    return Container(
-      color: const Color(0xFFEFF4FF),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 220),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFDCEBFF), Color(0xFFF8FAFC)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.route_outlined,
-                        size: 56,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        route == null
-                            ? 'Live location is active'
-                            : 'Routing to ${route.label}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        location == null
-                            ? 'Waiting for your GPS point.'
-                            : '${location.latitude.toStringAsFixed(5)}, '
-                                  '${location.longitude.toStringAsFixed(5)}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.grey),
-                      ),
-                      if (distance != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          '${formatRouteDistance(distance)} remaining',
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
   }
 }
 

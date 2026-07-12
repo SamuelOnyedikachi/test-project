@@ -9,6 +9,15 @@ class LocationPermissionException implements Exception {
   String toString() => message;
 }
 
+class LocationAccuracyException implements Exception {
+  const LocationAccuracyException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class LocationService {
   Future<void> ensurePermission() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -36,12 +45,20 @@ class LocationService {
     }
   }
 
-  Future<Position> getCurrentPosition() {
-    return Geolocator.getCurrentPosition(
+  Future<Position> getCurrentPosition() async {
+    final position = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
         timeLimit: Duration(seconds: 12),
       ),
     );
+    if (position.accuracy > 5000) {
+      throw LocationAccuracyException(
+        'Your browser returned an approximate network location '
+        '(${(position.accuracy / 1000).round()} km accuracy). Enable precise '
+        'location or use a GPS-enabled phone before starting live tracking.',
+      );
+    }
+    return position;
   }
 }

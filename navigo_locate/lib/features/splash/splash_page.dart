@@ -26,7 +26,7 @@ class _SplashPageState extends State<SplashPage>
       vsync: this,
       duration: const Duration(milliseconds: 1250),
     );
-    _scale = Tween<double>(begin: 0.94, end: 1.06).animate(
+    _scale = Tween<double>(begin: 0.97, end: 1.03).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOutCubic),
     );
     _opacity = Tween<double>(
@@ -52,17 +52,25 @@ class _SplashPageState extends State<SplashPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF303735),
-      body: ClipRect(
-        child: FadeTransition(
-          opacity: _opacity,
-          child: ScaleTransition(
-            scale: _scale,
-            child: SizedBox.expand(
-              child: Image.asset(
-                AppAssets.introLogo,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.high,
-                semanticLabel: 'NaviGo-Locate',
+      body: Center(
+        child: FractionallySizedBox(
+          widthFactor: 0.78,
+          heightFactor: 0.52,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 480,
+              maxHeight: 360,
+            ),
+            child: FadeTransition(
+              opacity: _opacity,
+              child: ScaleTransition(
+                scale: _scale,
+                child: Image.asset(
+                  AppAssets.introLogo,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                  semanticLabel: 'NaviGo-Locate',
+                ),
               ),
             ),
           ),

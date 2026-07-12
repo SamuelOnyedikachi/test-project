@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
@@ -86,3 +87,28 @@ class LiveOperationsDataTests(TestCase):
         self.assertEqual(payload["sessions"][0]["id"], session.id)
         self.assertEqual(payload["sessions"][0]["latitude"], 6.5244)
         self.assertEqual(payload["sessions"][0]["longitude"], 3.3792)
+
+    @patch("tracking.services.broadcast_location_update", side_effect=RuntimeError)
+    @patch("tracking.services.cache_live_location", side_effect=RuntimeError)
+    def test_location_is_saved_when_realtime_services_are_unavailable(
+        self,
+        _cache_live_location,
+        _broadcast_location_update,
+    ):
+        user = get_user_model().objects.create_user(username="offline-realtime-user")
+        session = TrackingSession.objects.create(user=user)
+
+        record_location_update(
+            session,
+            {
+                "latitude": "6.6018000",
+                "longitude": "3.3515000",
+                "accuracy": 12.0,
+                "recorded_at": timezone.now(),
+            },
+            actor=user,
+        )
+
+        session.refresh_from_db()
+        self.assertEqual(float(session.latest_latitude), 6.6018)
+        self.assertEqual(float(session.latest_longitude), 3.3515)
