@@ -1,0 +1,178 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+  {{ block.super }}
+  <section class="geofence-editor">
+    <div class="geofence-toolbar">
+      <div>
+        <strong>Boundary editor</strong>
+        <p>Search for a place, click the map to reposition, then drag the shape handles to define the monitored area.</p>
+      </div>
+      <div class="geofence-search">
+        <input id="geofence-place" type="search" placeholder="Building, street, landmark, LGA or city">
+        <button id="geofence-search-button" type="button">Find place</button>
+      </div>
+      <div class="geofence-shapes" aria-label="Geofence shape">
+        <button type="button" data-shape="circle">Circle</button>
+        <button type="button" data-shape="rectangle">Rectangle</button>
+        <button type="button" data-shape="square">Square</button>
+      </div>
+    </div>
+    <div id="geofence-map" aria-label="Interactive geofence boundary map"></div>
+    <div class="geofence-metrics" id="geofence-metrics">Loading map measurements...</div>
+  </section>
+
+  <style>
+    .geofence-editor { margin:24px 0; border:1px solid #d8dee9; border-radius:8px; overflow:hidden; background:#fff; }
+    .geofence-toolbar { display:grid; grid-template-columns:minmax(220px,1fr) minmax(280px,1.4fr) auto; gap:16px; align-items:center; padding:16px; border-bottom:1px solid #e5e7eb; }
+    .geofence-toolbar p { margin:4px 0 0; color:#64748b; font-size:12px; }
+    .geofence-search, .geofence-shapes { display:flex; gap:8px; }
+    .geofence-search input { min-width:0; flex:1; border:1px solid #cbd5e1; border-radius:6px; padding:9px 10px; }
+    .geofence-toolbar button { border:1px solid #cbd5e1; border-radius:6px; padding:9px 12px; background:#fff; color:#0f172a; font-weight:700; cursor:pointer; }
+    .geofence-toolbar button.is-active { border-color:#0f62fe; background:#0f62fe; color:#fff; }
+    #geofence-map { width:100%; min-height:520px; background:#e2e8f0; }
+    .geofence-metrics { padding:12px 16px; color:#334155; font-size:13px; border-top:1px solid #e5e7eb; }
+    .dark .geofence-editor, .dark .geofence-toolbar button, .dark .geofence-search input { background:#111827; color:#e5e7eb; border-color:#374151; }
+    .dark .geofence-toolbar, .dark .geofence-metrics { border-color:#374151; }
+    @media (max-width:900px) { .geofence-toolbar { grid-template-columns:1fr; } #geofence-map { min-height:420px; } }
+  </style>
+{% endblock %}
+
+{% block footer %}
+  {{ block.super }}
+  <script>
+    (() => {
+      const field = name => document.getElementById(`id_${name}`);
+      const number = (name, fallback) => Number.parseFloat(field(name)?.value) || fallback;
+      const write = (name, value) => { if (field(name)) field(name).value = Number(value).toFixed(7); };
+      let map;
+      let overlay;
+      let geocoder;
+      let normalizingSquare = false;
+
+      function currentCenter() {
+        return { lat: number('center_latitude', 9.082), lng: number('center_longitude', 8.6753) };
+      }
+
+      function defaultBounds(center, radius) {
+        const latitudeDelta = radius / 111320;
+        const longitudeDelta = radius / (111320 * Math.max(Math.cos(center.lat * Math.PI / 180), .2));
+        return { north: center.lat + latitudeDelta, south: center.lat - latitudeDelta, east: center.lng + longitudeDelta, west: center.lng - longitudeDelta };
+      }
+
+      function savedBounds(center, radius) {
+        const values = {
+          north: number('north_latitude', NaN), south: number('south_latitude', NaN),
+          east: number('east_longitude', NaN), west: number('west_longitude', NaN)
+        };
+        return Object.values(values).every(Number.isFinite) ? values : defaultBounds(center, radius);
+      }
+
+      function reverseGeocode(center) {
+        geocoder.geocode({ location: center }).then(response => {
+          const result = response.results?.[0];
+          if (result && field('address')) field('address').value = result.formatted_address;
+        }).catch(() => {});
+      }
+
+      function updateCircle() {
+        const center = overlay.getCenter();
+        const radius = overlay.getRadius();
+        write('center_latitude', center.lat());
+        write('center_longitude', center.lng());
+        field('radius_meters').value = Math.max(1, Math.round(radius));
+        ['north_latitude', 'south_latitude', 'east_longitude', 'west_longitude'].forEach(name => { if (field(name)) field(name).value = ''; });
+        document.getElementById('geofence-metrics').textContent = `Circle radius: ${(radius / 1000).toFixed(3)} km · diameter: ${(radius * 2 / 1000).toFixed(3)} km · area: ${(Math.PI * radius * radius / 1e6).toFixed(3)} km²`;
+      }
+
+      function updateRectangle() {
+        if (!overlay) return;
+        let bounds = overlay.getBounds();
+        let ne = bounds.getNorthEast();
+        let sw = bounds.getSouthWest();
+        const center = bounds.getCenter();
+        let width = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(center.lat(), sw.lng()), new google.maps.LatLng(center.lat(), ne.lng())
+        );
+        let height = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(sw.lat(), center.lng()), new google.maps.LatLng(ne.lat(), center.lng())
+        );
+
+        if (field('shape_type').value === 'square' && !normalizingSquare && Math.abs(width - height) > 1) {
+          normalizingSquare = true;
+          const side = Math.min(width, height);
+          const normalized = defaultBounds(center.toJSON(), side / 2);
+          overlay.setBounds(normalized);
+          normalizingSquare = false;
+          bounds = overlay.getBounds(); ne = bounds.getNorthEast(); sw = bounds.getSouthWest();
+          width = height = side;
+        }
+
+        write('center_latitude', center.lat()); write('center_longitude', center.lng());
+        write('north_latitude', ne.lat()); write('south_latitude', sw.lat());
+        write('east_longitude', ne.lng()); write('west_longitude', sw.lng());
+        const cornerRadius = google.maps.geometry.spherical.computeDistanceBetween(center, ne);
+        field('radius_meters').value = Math.max(1, Math.round(cornerRadius));
+        document.getElementById('geofence-metrics').textContent = `${field('shape_type').value === 'square' ? 'Square side' : 'Rectangle'}: ${(width / 1000).toFixed(3)} km × ${(height / 1000).toFixed(3)} km · perimeter: ${(2 * (width + height) / 1000).toFixed(3)} km · area: ${(width * height / 1e6).toFixed(3)} km² · center-to-corner radius: ${(cornerRadius / 1000).toFixed(3)} km`;
+      }
+
+      function setShape(shape, keepBounds = true) {
+        field('shape_type').value = shape;
+        document.querySelectorAll('[data-shape]').forEach(button => button.classList.toggle('is-active', button.dataset.shape === shape));
+        if (overlay) overlay.setMap(null);
+        const center = currentCenter();
+        const radius = number('radius_meters', 250);
+        if (shape === 'circle') {
+          overlay = new google.maps.Circle({ map, center, radius, editable:true, draggable:true, fillColor:'#0f62fe', fillOpacity:.18, strokeColor:'#0f62fe', strokeWeight:2 });
+          overlay.addListener('center_changed', updateCircle);
+          overlay.addListener('radius_changed', updateCircle);
+          updateCircle();
+        } else {
+          overlay = new google.maps.Rectangle({ map, bounds: keepBounds ? savedBounds(center, radius) : defaultBounds(center, radius), editable:true, draggable:true, fillColor:'#0f62fe', fillOpacity:.18, strokeColor:'#0f62fe', strokeWeight:2 });
+          overlay.addListener('bounds_changed', updateRectangle);
+          updateRectangle();
+        }
+      }
+
+      function findPlace() {
+        const query = document.getElementById('geofence-place').value.trim();
+        if (!query) return;
+        geocoder.geocode({ address: query, region: 'ng' }).then(response => {
+          const result = response.results?.[0];
+          if (!result) return;
+          map.fitBounds(result.geometry.viewport);
+          moveShape(result.geometry.location);
+          if (field('address')) field('address').value = result.formatted_address;
+        });
+      }
+
+      function moveShape(latLng) {
+        if (overlay instanceof google.maps.Circle) overlay.setCenter(latLng);
+        else {
+          const bounds = overlay.getBounds();
+          const oldCenter = bounds.getCenter();
+          const north = bounds.getNorthEast().lat() - oldCenter.lat();
+          const east = bounds.getNorthEast().lng() - oldCenter.lng();
+          overlay.setBounds({ north:latLng.lat()+north, south:latLng.lat()-north, east:latLng.lng()+east, west:latLng.lng()-east });
+        }
+        reverseGeocode(latLng);
+      }
+
+      window.initGeofenceMap = () => {
+        const center = currentCenter();
+        geocoder = new google.maps.Geocoder();
+        map = new google.maps.Map(document.getElementById('geofence-map'), { center, zoom:16, mapTypeId:google.maps.MapTypeId.ROADMAP, clickableIcons:true, streetViewControl:true, fullscreenControl:true, mapTypeControl:true });
+        setShape(field('shape_type')?.value || 'circle');
+        map.addListener('click', event => moveShape(event.latLng));
+        document.querySelectorAll('[data-shape]').forEach(button => button.addEventListener('click', () => setShape(button.dataset.shape, false)));
+        document.getElementById('geofence-search-button').addEventListener('click', findPlace);
+        document.getElementById('geofence-place').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); findPlace(); } });
+      };
+    })();
+  </script>
+  {% if google_maps_web_api_key %}
+    <script async src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_web_api_key|urlencode }}&callback=initGeofenceMap&loading=async&v=weekly&libraries=geometry"></script>
+  {% else %}
+    <script>document.getElementById('geofence-metrics').textContent = 'Google Maps is not configured. Add GOOGLE_MAPS_WEB_API_KEY to the backend environment.';</script>
+  {% endif %}
+{% endblock %}

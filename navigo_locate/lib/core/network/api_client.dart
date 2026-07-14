@@ -49,6 +49,22 @@ class ApiClient {
     );
   }
 
+  Future<Response<dynamic>> patch(
+    String path, {
+    Map<String, dynamic> data = const {},
+    String? accessToken,
+  }) {
+    return _dio.patch(
+      _normalizePath(path),
+      data: data,
+      options: Options(
+        headers: accessToken == null
+            ? null
+            : {'Authorization': 'Bearer $accessToken'},
+      ),
+    );
+  }
+
   String _normalizePath(String path) {
     if (path.startsWith('/')) {
       return path.substring(1);

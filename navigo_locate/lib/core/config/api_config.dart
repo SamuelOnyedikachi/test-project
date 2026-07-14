@@ -3,6 +3,6 @@ class ApiConfig {
 
   static const baseUrl = String.fromEnvironment(
     'NAVIGO_API_BASE_URL',
-    defaultValue: 'http://localhost:8000/api/v1',
+    defaultValue: 'https://navigo-locate-production.up.railway.app/api/v1',
   );
 }

@@ -52,11 +52,11 @@ class LocationService {
         timeLimit: Duration(seconds: 12),
       ),
     );
-    if (position.accuracy > 5000) {
+    if (position.accuracy > 100) {
       throw LocationAccuracyException(
-        'Your browser returned an approximate network location '
-        '(${(position.accuracy / 1000).round()} km accuracy). Enable precise '
-        'location or use a GPS-enabled phone before starting live tracking.',
+        'The device returned an approximate location '
+        '(${position.accuracy.toStringAsFixed(0)} m accuracy). Enable precise '
+        'location, move near a window or outdoors, and wait for a GPS fix.',
       );
     }
     return position;

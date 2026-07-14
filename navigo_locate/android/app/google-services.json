@@ -34,7 +34,7 @@
               "client_id": "615379143825-44mgtgfs4ei1smq71lcbo79sfitt6t55.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.example.navigoLocate"
+                "bundle_id": "com.psalmcodes.navigoLocate"
               }
             }
           ]
@@ -45,7 +45,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:615379143825:android:c17bafa7ae8afb29bcc330",
         "android_client_info": {
-          "package_name": "com.example.navigo_locate"
+          "package_name": "com.psalmcodes.navigo_locate"
         }
       },
       "oauth_client": [
@@ -70,7 +70,7 @@
               "client_id": "615379143825-44mgtgfs4ei1smq71lcbo79sfitt6t55.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.example.navigoLocate"
+                "bundle_id": "com.psalmcodes.navigoLocate"
               }
             }
           ]

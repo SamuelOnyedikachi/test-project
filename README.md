@@ -615,3 +615,5 @@ When the mobile app posts a new route point, the backend broadcasts:
 
 Configure the `POSTGRES_*` environment variables before deployment. The backend
 uses SQLite only when `POSTGRES_DB` is empty.
+
+

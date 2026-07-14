@@ -1,4 +1,4 @@
-package com.example.navigo_locate
+package com.psalmcodes.navigo_locate
 
 import io.flutter.embedding.android.FlutterActivity
 

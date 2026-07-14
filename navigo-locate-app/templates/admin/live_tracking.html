@@ -25,7 +25,7 @@
     .session-meta { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:12px; }
     .agency-select { width:100%; min-height:86px; border:1px solid #cbd5e1; border-radius:6px; padding:7px; background:#fff; color:#0f172a; }
     .assign-button { width:100%; margin-top:8px; border:0; border-radius:6px; padding:9px 12px; background:#0f62fe; color:white; font-weight:700; cursor:pointer; }
-    .session-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+    .session-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
     .session-action { border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; background:#fff; color:#0f172a; cursor:pointer; font-size:12px; font-weight:700; }
     .session-action.following { background:#dcfce7; border-color:#86efac; color:#166534; }
     .empty-state { padding:48px 24px; text-align:center; color:#64748b; }
@@ -65,6 +65,9 @@
     const trails = new Map();
     const trailPoints = new Map();
     const infoWindows = new Map();
+    const stepMarkers = [];
+    const addressCache = new Map();
+    let geocoder = null;
     let selectedSessionId = null;
     let followSelected = true;
     let latestSessions = [];
@@ -97,20 +100,25 @@
         activeIds.add(session.id);
         const assignedIds = new Set(session.organizations.map(item => item.id));
         const options = organizations.map(org => `<option value="${org.id}" ${assignedIds.has(org.id) ? 'selected' : ''}>${escapeHtml(org.name)}</option>`).join('');
+        const latestStep = session.route?.at(-1);
+        const routeSummary = latestStep
+          ? `${(latestStep.total_distance_meters / 1000).toFixed(3)} km tracked · last step ${latestStep.distance_meters.toFixed(1)} m in ${formatDuration(latestStep.duration_seconds)}`
+          : 'Waiting for route points';
         const card = document.createElement('section');
         card.className = `session-card ${session.emergency ? 'is-emergency' : ''}`;
         card.innerHTML = `
           <div class="session-title"><div><strong>${escapeHtml(session.user)}</strong><small>@${escapeHtml(session.username)} · Session ${session.id}</small></div><span class="badge ${session.emergency ? 'danger' : ''}">${session.emergency ? 'SOS' : 'ACTIVE'}</span></div>
-          <div class="session-meta"><span>Accuracy: ${session.accuracy ?? '—'} m</span><span>Speed: ${session.speed ?? '—'} m/s</span><span>Heading: ${session.heading ?? '—'}°</span><span>${new Date(session.updated_at).toLocaleTimeString()}</span></div>
-          <div class="session-actions"><button class="session-action view-user" type="button">View on map</button><button class="session-action follow-user ${selectedSessionId === session.id && followSelected ? 'following' : ''}" type="button">${selectedSessionId === session.id && followSelected ? 'Following' : 'Follow movement'}</button></div>
+          <div class="session-meta"><span>Accuracy: ${session.accuracy ?? '—'} m</span><span>Speed: ${session.speed ?? '—'} m/s</span><span>Heading: ${session.heading ?? '—'}°</span><span>${new Date(session.updated_at).toLocaleTimeString()}</span><span style="grid-column:1/-1">${routeSummary}</span><span class="session-address" style="grid-column:1/-1">Resolving street and LGA...</span></div>
+          <div class="session-actions"><button class="session-action view-user" type="button">View</button><button class="session-action follow-user ${selectedSessionId === session.id && followSelected ? 'following' : ''}" type="button">${selectedSessionId === session.id && followSelected ? 'Following' : 'Follow'}</button><button class="session-action route-steps" type="button">Steps</button></div>
           <form method="post" action="{{ assign_url }}">{% csrf_token %}<input type="hidden" name="session_id" value="${session.id}"><label><strong>Monitoring agencies</strong></label><select class="agency-select" name="organization_ids" multiple>${options}</select><button class="assign-button" type="submit">Update assignment</button></form>`;
         card.querySelector('.view-user').addEventListener('click', () => focusSession(session.id, false));
         card.querySelector('.follow-user').addEventListener('click', () => focusSession(session.id, true));
+        card.querySelector('.route-steps').addEventListener('click', () => showRouteSteps(session));
         list.appendChild(card);
 
         if (session.latitude !== null && session.longitude !== null) {
           const point = { lat: session.latitude, lng: session.longitude };
-          const popup = `<strong>${escapeHtml(session.user)}</strong><br>Session ${session.id}${session.emergency ? '<br><b>SOS active</b>' : ''}`;
+          const popup = `<strong>${escapeHtml(session.user)}</strong><br>Session ${session.id}${session.emergency ? '<br><b>SOS active</b>' : ''}<br><span id="marker-address-${session.id}">Resolving address...</span>`;
           if (markers.has(session.id)) {
             markers.get(session.id).setPosition(point);
             infoWindows.get(session.id).setContent(popup);
@@ -139,21 +147,24 @@
             infoWindows.set(session.id, infoWindow);
           }
 
-          const points = trailPoints.get(session.id) || [];
-          const last = points[points.length - 1];
-          if (!last || last.lat !== point.lat || last.lng !== point.lng) {
-            points.push(point);
-            if (points.length > 30) points.shift();
-            trailPoints.set(session.id, points);
-            if (trails.has(session.id)) trails.get(session.id).setPath(points);
-            else trails.set(session.id, new google.maps.Polyline({
+          const points = (session.route || []).map(step => ({ lat:step.latitude, lng:step.longitude }));
+          if (!points.length) points.push(point);
+          trailPoints.set(session.id, points);
+          if (trails.has(session.id)) trails.get(session.id).setPath(points);
+          else trails.set(session.id, new google.maps.Polyline({
               path: points,
               map,
               strokeColor: session.emergency ? '#dc2626' : '#0f62fe',
               strokeOpacity: .78,
               strokeWeight: 4
-            }));
-          }
+          }));
+
+          resolveAddress(point).then(address => {
+            const addressNode = card.querySelector('.session-address');
+            if (addressNode) addressNode.textContent = address;
+            const markerAddress = document.getElementById(`marker-address-${session.id}`);
+            if (markerAddress) markerAddress.textContent = address;
+          });
 
           if (followSelected && selectedSessionId === session.id) {
             map.panTo(point);
@@ -178,6 +189,58 @@
         fitSessions(located, 15);
         map._navigoFitted = true;
       }
+    }
+
+    function formatDuration(seconds) {
+      if (!seconds) return '0 sec';
+      if (seconds < 60) return `${seconds.toFixed(1)} sec`;
+      return `${Math.floor(seconds / 60)} min ${Math.round(seconds % 60)} sec`;
+    }
+
+    async function resolveAddress(point) {
+      const key = `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`;
+      if (addressCache.has(key)) return addressCache.get(key);
+      try {
+        const response = await geocoder.geocode({ location:point });
+        const result = response.results?.[0];
+        const address = result?.formatted_address || key;
+        addressCache.set(key, address);
+        return address;
+      } catch (_) {
+        return key;
+      }
+    }
+
+    function clearStepMarkers() {
+      while (stepMarkers.length) stepMarkers.pop().setMap(null);
+    }
+
+    function showRouteSteps(session) {
+      clearStepMarkers();
+      selectedSessionId = session.id;
+      followSelected = false;
+      const route = session.route || [];
+      route.forEach((step, index) => {
+        const point = { lat:step.latitude, lng:step.longitude };
+        const marker = new google.maps.Marker({
+          map, position:point, title:`Step ${index + 1}`,
+          icon:{ path:google.maps.SymbolPath.CIRCLE, scale:5, fillColor:'#ffffff', fillOpacity:1, strokeColor:'#0f62fe', strokeWeight:2 }
+        });
+        const info = new google.maps.InfoWindow({ content:`<strong>Step ${index + 1}</strong><br>${new Date(step.recorded_at).toLocaleString()}<br>${step.distance_meters.toFixed(1)} m from previous point<br>${formatDuration(step.duration_seconds)} travel time<br>Accuracy: ${step.accuracy ?? '—'} m` });
+        marker.addListener('click', async () => {
+          const address = await resolveAddress(point);
+          info.setContent(`<strong>Step ${index + 1}</strong><br>${escapeHtml(address)}<br>${new Date(step.recorded_at).toLocaleString()}<br>${step.distance_meters.toFixed(1)} m from previous point<br>${formatDuration(step.duration_seconds)} travel time<br>Total: ${(step.total_distance_meters / 1000).toFixed(3)} km<br>Accuracy: ${step.accuracy ?? '—'} m`);
+          info.open({ map, anchor:marker });
+        });
+        stepMarkers.push(marker);
+      });
+      if (route.length) {
+        const bounds = new google.maps.LatLngBounds();
+        route.forEach(step => bounds.extend({ lat:step.latitude, lng:step.longitude }));
+        map.fitBounds(bounds, 48);
+      }
+      document.getElementById('map-status').textContent = `Showing ${route.length} timestamped movement steps for ${session.user}`;
+      updateFollowButton();
     }
 
     function locatedSession(sessionId) {
@@ -285,6 +348,7 @@
       };
       {% if google_map_id %}options.mapId = '{{ google_map_id|escapejs }}';{% endif %}
       map = new google.maps.Map(document.getElementById('operations-map'), options);
+      geocoder = new google.maps.Geocoder();
       map.addListener('zoom_changed', () => {
         if (followSelected) return;
         const zoom = map.getZoom();

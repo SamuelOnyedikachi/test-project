@@ -12,8 +12,11 @@ import '../features/settings/settings_page.dart';
 import '../features/splash/splash_page.dart';
 import '../features/tracking/live_map_page.dart';
 import '../features/tracking/live_tracking_provider.dart';
+import '../shared/widgets/notification_popup_host.dart';
 import 'router.dart';
 import 'theme.dart';
+
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class NavigoLocate extends StatelessWidget {
   const NavigoLocate({super.key});
@@ -26,9 +29,14 @@ class NavigoLocate extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ContactsProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: rootNavigatorKey,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         initialRoute: Routes.splash,
+        builder: (context, child) => NotificationPopupHost(
+          navigatorKey: rootNavigatorKey,
+          child: child!,
+        ),
         routes: {
           Routes.splash: (_) => const SplashPage(),
           Routes.login: (_) => const LoginPage(),

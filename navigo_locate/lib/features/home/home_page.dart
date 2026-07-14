@@ -101,10 +101,11 @@ class HomePage extends StatelessWidget {
 
                 InfoCard(
                   icon: Icons.location_on_outlined,
-                  title: 'Current Coordinates',
+                  title: 'Current Location',
                   value: location == null
                       ? 'Waiting for GPS'
-                      : '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
+                      : tracking.latestAddress ??
+                            '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
                   color: AppColors.primary,
                 ),
                 const SizedBox(height: 14),

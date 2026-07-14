@@ -3,6 +3,13 @@ from django.conf import settings
 
 
 class Notification(models.Model):
+    class Scope(models.TextChoices):
+        SYSTEM = "system", "System"
+        SAFETY = "safety", "Safety"
+        TRACKING = "tracking", "Tracking"
+        EMERGENCY = "emergency", "Emergency"
+        ACCOUNT = "account", "Account"
+
     class Channel(models.TextChoices):
         PUSH = "push", "Push"
         SMS = "sms", "SMS"
@@ -20,15 +27,30 @@ class Notification(models.Model):
     )
     channel = models.CharField(max_length=20, choices=Channel.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    scope = models.CharField(
+        max_length=30,
+        choices=Scope.choices,
+        default=Scope.SYSTEM,
+        help_text="Controls how the app categorizes and visually prioritizes this message.",
+    )
     title = models.CharField(max_length=180)
     message = models.TextField()
+    show_as_popup = models.BooleanField(
+        default=True,
+        help_text="Show this message as an in-app dialog the next time the recipient is active.",
+    )
     recipient = models.CharField(max_length=180, blank=True)
     provider = models.CharField(max_length=80, blank=True)
     provider_message_id = models.CharField(max_length=180, blank=True)
     error_message = models.TextField(blank=True)
-    payload = models.JSONField(default=dict, blank=True)
+    payload = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Optional JSON such as {"type":"route.alert","session_id":12,"action_url":"/live-map"}. Never include passwords or secrets.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'navigo-nigeria.firebasestorage.app',
     iosClientId:
         '615379143825-44mgtgfs4ei1smq71lcbo79sfitt6t55.apps.googleusercontent.com',
-    iosBundleId: 'com.example.navigoLocate',
+    iosBundleId: 'com.psalmcodes.navigoLocate',
   );
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyD2l6NX5qS13btMiSoSoHZWhVCX_D8ggZw',
@@ -74,7 +74,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'navigo-nigeria.firebasestorage.app',
     iosClientId:
         '615379143825-44mgtgfs4ei1smq71lcbo79sfitt6t55.apps.googleusercontent.com',
-    iosBundleId: 'com.example.navigoLocate',
+    iosBundleId: 'com.psalmcodes.navigoLocate',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

@@ -7,15 +7,19 @@ import '../../models/destination_route.dart';
 import '../../models/location_snapshot.dart';
 import '../../repositories/live_tracking_repository.dart';
 import '../../services/location_service.dart';
+import '../../services/location_address_service.dart';
 
 class LiveTrackingProvider extends ChangeNotifier {
   LiveTrackingProvider({
     LocationService? locationService,
+    LocationAddressService? addressService,
     LiveTrackingRepository? repository,
   }) : _locationService = locationService ?? LocationService(),
+       _addressService = addressService ?? LocationAddressService(),
        _repository = repository ?? LiveTrackingRepository();
 
   final LocationService _locationService;
+  final LocationAddressService _addressService;
   final LiveTrackingRepository _repository;
 
   Timer? _timer;
@@ -23,6 +27,8 @@ class LiveTrackingProvider extends ChangeNotifier {
   DestinationRoute? _destinationRoute;
   String? _activeSessionId;
   String? _errorMessage;
+  String? _latestAddress;
+  String? _addressKey;
   bool _isTracking = false;
   bool _isBusy = false;
   bool _isEmergency = false;
@@ -31,6 +37,7 @@ class LiveTrackingProvider extends ChangeNotifier {
   DestinationRoute? get destinationRoute => _destinationRoute;
   String? get activeSessionId => _activeSessionId;
   String? get errorMessage => _errorMessage;
+  String? get latestAddress => _latestAddress;
   bool get isTracking => _isTracking;
   bool get isBusy => _isBusy;
   bool get isEmergency => _isEmergency;
@@ -126,8 +133,11 @@ class LiveTrackingProvider extends ChangeNotifier {
       final position = await _locationService.getCurrentPosition();
       final snapshot = LocationSnapshot.fromPosition(position);
       _latestLocation = snapshot;
-      _errorMessage = null;
+      _errorMessage = snapshot.accuracy > 5
+          ? 'GPS accuracy is ${snapshot.accuracy.toStringAsFixed(0)} m. Navigo is requesting a sub-5 m fix; accuracy improves outdoors on a GPS-enabled phone.'
+          : null;
       notifyListeners();
+      unawaited(_resolveAddress(snapshot));
 
       await _repository.publishLocation(
         accessToken: _accessToken,
@@ -137,6 +147,25 @@ class LiveTrackingProvider extends ChangeNotifier {
     } catch (error) {
       _errorMessage = error.toString();
       notifyListeners();
+    }
+  }
+
+  Future<void> _resolveAddress(LocationSnapshot snapshot) async {
+    final key =
+        '${snapshot.latitude.toStringAsFixed(4)},${snapshot.longitude.toStringAsFixed(4)}';
+    if (_addressKey == key) return;
+    _addressKey = key;
+    try {
+      final address = await _addressService.reverseGeocode(
+        snapshot.latitude,
+        snapshot.longitude,
+      );
+      if (_addressKey == key) {
+        _latestAddress = address;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Coordinates remain available while address lookup retries after movement.
     }
   }
 

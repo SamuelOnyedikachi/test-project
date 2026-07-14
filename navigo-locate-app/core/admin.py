@@ -1,4 +1,5 @@
 import re
+import math
 from datetime import timedelta
 
 from django.conf import settings
@@ -7,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.models import Group
 from django.http import JsonResponse
+from django.db.models import Prefetch
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -94,7 +96,14 @@ class NavigoAdminSite(UnfoldAdminSite):
                 updated_at__gte=fresh_after,
             )
             .select_related("user")
-            .prefetch_related("assigned_organizations")
+            .prefetch_related(
+                "assigned_organizations",
+                Prefetch(
+                    "route_points",
+                    queryset=RoutePoint.objects.order_by("-recorded_at")[:60],
+                    to_attr="recent_route_points",
+                ),
+            )
             .order_by("-emergency", "-updated_at")
         )
         return JsonResponse(
@@ -116,6 +125,7 @@ class NavigoAdminSite(UnfoldAdminSite):
                         "speed": session.latest_speed,
                         "heading": session.latest_heading,
                         "updated_at": session.updated_at.isoformat(),
+                        "route": self._route_segments(session),
                         "organizations": [
                             {"id": organization.id, "name": organization.name}
                             for organization in session.assigned_organizations.all()
@@ -125,6 +135,39 @@ class NavigoAdminSite(UnfoldAdminSite):
                 ]
             }
         )
+
+    @staticmethod
+    def _route_segments(session):
+        points = list(reversed(session.recent_route_points))
+        result = []
+        total_distance = 0.0
+        previous = None
+        for point in points:
+            distance = 0.0
+            duration = 0.0
+            if previous is not None:
+                distance = _distance_meters(
+                    float(previous.latitude),
+                    float(previous.longitude),
+                    float(point.latitude),
+                    float(point.longitude),
+                )
+                duration = max(0.0, (point.recorded_at - previous.recorded_at).total_seconds())
+                total_distance += distance
+            result.append(
+                {
+                    "id": point.id,
+                    "latitude": float(point.latitude),
+                    "longitude": float(point.longitude),
+                    "accuracy": point.accuracy,
+                    "recorded_at": point.recorded_at.isoformat(),
+                    "distance_meters": round(distance, 2),
+                    "duration_seconds": round(duration, 1),
+                    "total_distance_meters": round(total_distance, 2),
+                }
+            )
+            previous = point
+        return result
 
     @require_POST
     def assign_tracking_organizations(self, request):
@@ -241,5 +284,18 @@ navigo_admin_site.register(Notification, NotificationAdmin)
 navigo_admin_site.register(MapProvider, MapProviderAdmin)
 navigo_admin_site.register(Geofence, GeofenceAdmin)
 navigo_admin_site.register(GeofenceEvent, GeofenceEventAdmin)
+
+
+def _distance_meters(lat1, lon1, lat2, lon2):
+    radius = 6371000
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    value = (
+        math.sin(delta_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    )
+    return radius * 2 * math.atan2(math.sqrt(value), math.sqrt(1 - value))
 navigo_admin_site.register(Organization, OrganizationAdmin)
 navigo_admin_site.register(OrganizationMember, OrganizationMemberAdmin)

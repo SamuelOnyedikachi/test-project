@@ -7,6 +7,7 @@ import '../../models/destination_route.dart';
 import '../../models/location_snapshot.dart';
 import '../../models/trusted_contact.dart';
 import '../../services/google_maps_loader.dart';
+import '../../services/location_address_service.dart';
 import '../contacts/contacts_provider.dart';
 import 'live_tracking_provider.dart';
 
@@ -103,13 +104,16 @@ class _MapSurface extends StatefulWidget {
 class _MapSurfaceState extends State<_MapSurface> {
   GoogleMapController? _controller;
   LatLng? _lastPosition;
+  LatLng? _addressPosition;
+  String? _address;
+  final LocationAddressService _addressService = LocationAddressService();
 
   @override
   Widget build(BuildContext context) {
     final location = widget.tracking.latestLocation;
     final route = widget.tracking.destinationRoute;
     final target = location == null
-        ? const LatLng(6.5244, 3.3792)
+        ? const LatLng(9.0820, 8.6753)
         : LatLng(location.latitude, location.longitude);
 
     if (!googleMapsReady) {
@@ -129,51 +133,125 @@ class _MapSurfaceState extends State<_MapSurface> {
     }
 
     _moveToLatestPosition(target, location != null);
+    if (location != null) _resolveAddress(target);
 
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: target,
-        zoom: location == null ? 11 : 17,
-      ),
-      myLocationButtonEnabled: true,
-      myLocationEnabled: true,
-      mapType: MapType.hybrid,
-      onMapCreated: (controller) {
-        _controller = controller;
-        if (location != null) {
-          controller.animateCamera(CameraUpdate.newLatLngZoom(target, 17));
-        }
-      },
-      markers: {
-        Marker(
-          markerId: const MarkerId('current-location'),
-          position: target,
-          infoWindow: InfoWindow(
-            title: widget.tracking.isEmergency
-                ? 'Emergency Location'
-                : 'Current Location',
+    return Stack(
+      children: [
+        GoogleMap(
+          initialCameraPosition: CameraPosition(
+            target: target,
+            zoom: location == null ? 6 : 18,
+          ),
+          myLocationButtonEnabled: true,
+          myLocationEnabled: location != null,
+          mapType: MapType.normal,
+          buildingsEnabled: true,
+          compassEnabled: true,
+          indoorViewEnabled: true,
+          trafficEnabled: true,
+          zoomControlsEnabled: true,
+          onMapCreated: (controller) {
+            _controller = controller;
+            if (location != null) {
+              controller.animateCamera(CameraUpdate.newLatLngZoom(target, 18));
+            }
+          },
+          markers: {
+            if (location != null)
+              Marker(
+                markerId: const MarkerId('current-location'),
+                position: target,
+                infoWindow: InfoWindow(
+                  title: widget.tracking.isEmergency
+                      ? 'Emergency Location'
+                      : 'Current Location',
+                  snippet: _address,
+                ),
+              ),
+            if (route != null)
+              Marker(
+                markerId: const MarkerId('destination'),
+                position: LatLng(route.latitude, route.longitude),
+                infoWindow: InfoWindow(title: route.label),
+              ),
+          },
+          circles: {
+            if (location != null)
+              Circle(
+                circleId: const CircleId('gps-accuracy'),
+                center: target,
+                radius: location.accuracy,
+                fillColor: AppColors.primary.withValues(alpha: .12),
+                strokeColor: AppColors.primary.withValues(alpha: .65),
+                strokeWidth: 1,
+              ),
+          },
+          polylines: {
+            if (route != null && location != null)
+              Polyline(
+                polylineId: const PolylineId('destination-route'),
+                color: AppColors.primary,
+                width: 5,
+                points: [
+                  LatLng(location.latitude, location.longitude),
+                  LatLng(route.latitude, route.longitude),
+                ],
+              ),
+          },
+        ),
+        Positioned(
+          left: 12,
+          right: 12,
+          top: 12,
+          child: Material(
+            elevation: 2,
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.white.withValues(alpha: .95),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.place_outlined, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      location == null
+                          ? 'Waiting for a precise GPS location...'
+                          : _address ?? 'Resolving building, street and LGA...',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        if (route != null)
-          Marker(
-            markerId: const MarkerId('destination'),
-            position: LatLng(route.latitude, route.longitude),
-            infoWindow: InfoWindow(title: route.label),
-          ),
-      },
-      polylines: {
-        if (route != null && location != null)
-          Polyline(
-            polylineId: const PolylineId('destination-route'),
-            color: AppColors.primary,
-            width: 5,
-            points: [
-              LatLng(location.latitude, location.longitude),
-              LatLng(route.latitude, route.longitude),
-            ],
-          ),
-      },
+      ],
     );
+  }
+
+  void _resolveAddress(LatLng position) {
+    if (_addressPosition == position) return;
+    _addressPosition = position;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final address = await _addressService.reverseGeocode(
+          position.latitude,
+          position.longitude,
+        );
+        if (mounted && _addressPosition == position) {
+          setState(() => _address = address);
+        }
+      } catch (_) {
+        if (mounted && _addressPosition == position) {
+          setState(
+            () => _address =
+                '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}',
+          );
+        }
+      }
+    });
   }
 
   void _moveToLatestPosition(LatLng target, bool hasLocation) {

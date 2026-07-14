@@ -118,34 +118,26 @@ def _create_geofence_events(session, point):
     )
 
     for geofence in active_zones.distinct():
-        distance = _distance_meters(
-            float(point.latitude),
-            float(point.longitude),
-            float(geofence.center_latitude),
-            float(geofence.center_longitude),
-        )
-        if distance > geofence.radius_meters:
-            continue
-
-        exists = GeofenceEvent.objects.filter(
+        is_inside = _point_is_inside_geofence(geofence, point)
+        latest_event = GeofenceEvent.objects.filter(
             geofence=geofence,
             user=session.user,
-            event_type=GeofenceEvent.EventType.ENTER,
-            occurred_at__date=point.recorded_at.date(),
-        ).exists()
-        if exists:
+        ).order_by("-occurred_at").first()
+        was_inside = bool(latest_event and latest_event.event_type == GeofenceEvent.EventType.ENTER)
+        if is_inside == was_inside:
             continue
 
+        event_type = GeofenceEvent.EventType.ENTER if is_inside else GeofenceEvent.EventType.EXIT
         GeofenceEvent.objects.create(
             geofence=geofence,
             user=session.user,
-            event_type=GeofenceEvent.EventType.ENTER,
+            event_type=event_type,
             latitude=point.latitude,
             longitude=point.longitude,
             occurred_at=point.recorded_at,
         )
 
-        if geofence.zone_type == Geofence.ZoneType.DANGER:
+        if is_inside and geofence.zone_type == Geofence.ZoneType.DANGER:
             Notification.objects.create(
                 user=session.user,
                 channel=Notification.Channel.PUSH,
@@ -158,6 +150,31 @@ def _create_geofence_events(session, point):
                     "session_id": session.id,
                 },
             )
+
+
+def _point_is_inside_geofence(geofence, point):
+    latitude = float(point.latitude)
+    longitude = float(point.longitude)
+    if geofence.shape_type in {Geofence.ShapeType.RECTANGLE, Geofence.ShapeType.SQUARE}:
+        if None in {
+            geofence.north_latitude,
+            geofence.south_latitude,
+            geofence.east_longitude,
+            geofence.west_longitude,
+        }:
+            return False
+        return (
+            float(geofence.south_latitude) <= latitude <= float(geofence.north_latitude)
+            and float(geofence.west_longitude) <= longitude <= float(geofence.east_longitude)
+        )
+
+    distance = _distance_meters(
+        latitude,
+        longitude,
+        float(geofence.center_latitude),
+        float(geofence.center_longitude),
+    )
+    return distance <= geofence.radius_meters
 
 
 def _create_audit_log(session, point, actor=None, request=None):
