@@ -5,6 +5,23 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 User = get_user_model()
 
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "phone",
+            "full_name",
+            "avatar",
+            "is_verified",
+            "is_emergency_active",
+            "last_latitude",
+            "last_longitude",
+        ]
+
+
 class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         username = attrs.get(self.username_field)
@@ -12,7 +29,9 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
             user = User.objects.filter(email__iexact=username).first()
             if user:
                 attrs[self.username_field] = user.get_username()
-        return super().validate(attrs)
+        data = super().validate(attrs)
+        data["user"] = UserSerializer(self.user).data
+        return data
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -32,18 +51,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
 
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = [
-            "id",
-            "username",
-            "email",
-            "phone",
-            "full_name",
-            "avatar",
-            "is_verified",
-            "is_emergency_active",
-            "last_latitude",
-            "last_longitude",
-        ]
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.RegexField(r"^\d{6}$", write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8, max_length=128)
+    confirm_password = serializers.CharField(write_only=True, min_length=8, max_length=128)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        return attrs

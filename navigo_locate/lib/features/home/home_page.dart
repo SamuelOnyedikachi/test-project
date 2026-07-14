@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/router.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/local_clock_formatter.dart';
 import '../../shared/widgets/info_card.dart';
 import '../contacts/contacts_provider.dart';
+import '../auth/auth_service.dart';
 import '../tracking/live_tracking_provider.dart';
 
 class HomePage extends StatelessWidget {
@@ -51,14 +56,9 @@ class HomePage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Good Morning,',
-                  style: TextStyle(color: AppColors.grey),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Samuel',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                _LocalGreeting(
+                  username:
+                      AuthService.currentSession?.user.username ?? 'there',
                 ),
                 const SizedBox(height: 20),
 
@@ -426,6 +426,58 @@ class HomePage extends StatelessWidget {
       SnackBar(
         content: Text('Live session $session shared with $viewers contacts.'),
       ),
+    );
+  }
+}
+
+class _LocalGreeting extends StatefulWidget {
+  const _LocalGreeting({required this.username});
+
+  final String username;
+
+  @override
+  State<_LocalGreeting> createState() => _LocalGreetingState();
+}
+
+class _LocalGreetingState extends State<_LocalGreeting> {
+  late DateTime _now;
+  Timer? _clock;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _clock = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${LocalClockFormatter.greetingFor(_now)},',
+          style: const TextStyle(color: AppColors.grey),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          widget.username,
+          style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${DateFormat('EEEE, MMMM d, y | h:mm a').format(_now)} | ${LocalClockFormatter.timeZoneLabel(_now)}',
+          style: const TextStyle(color: AppColors.grey, fontSize: 13),
+        ),
+      ],
     );
   }
 }

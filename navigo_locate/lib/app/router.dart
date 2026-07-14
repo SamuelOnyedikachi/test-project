@@ -5,6 +5,8 @@ class Routes {
 
   static const register = "/register";
 
+  static const forgotPassword = "/forgot-password";
+
   static const home = "/home";
 
   static const liveMap = "/live-map";

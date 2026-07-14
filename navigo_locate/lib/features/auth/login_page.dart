@@ -91,7 +91,19 @@ class _LoginPageState extends State<LoginPage> {
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => Navigator.pushNamed(
+                                context,
+                                Routes.forgotPassword,
+                              ),
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       height: 52,

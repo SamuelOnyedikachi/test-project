@@ -114,6 +114,20 @@ GOOGLE_MAPS_WEB_API_KEY = config('GOOGLE_MAPS_WEB_API_KEY', default='')
 GOOGLE_MAPS_SERVER_API_KEY = config('GOOGLE_MAPS_SERVER_API_KEY', default='')
 GOOGLE_MAP_ID = config('GOOGLE_MAP_ID', default='')
 
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.console.EmailBackend' if DEBUG
+    else 'django.core.mail.backends.smtp.EmailBackend',
+)
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='NaviGo-Locate <no-reply@navigolocate.app>')
+PASSWORD_RESET_OTP_MINUTES = config('PASSWORD_RESET_OTP_MINUTES', default=10, cast=int)
+
 if REDIS_URL:
     CHANNEL_LAYERS = {
         'default': {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../features/auth/login_page.dart';
+import '../features/auth/forgot_password_page.dart';
 import '../features/auth/register_page.dart';
 import '../features/contacts/contacts_page.dart';
 import '../features/contacts/contacts_provider.dart';
@@ -41,6 +42,7 @@ class NavigoLocate extends StatelessWidget {
           Routes.splash: (_) => const SplashPage(),
           Routes.login: (_) => const LoginPage(),
           Routes.register: (_) => const RegisterPage(),
+          Routes.forgotPassword: (_) => const ForgotPasswordPage(),
           Routes.home: (_) => const HomePage(),
           Routes.liveMap: (_) => const LiveMapPage(),
           Routes.contacts: (_) => const ContactsPage(),
