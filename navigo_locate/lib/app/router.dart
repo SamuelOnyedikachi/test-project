@@ -18,4 +18,6 @@ class Routes {
   static const notifications = "/notifications";
 
   static const settings = "/settings";
+
+  static const profile = "/profile";
 }

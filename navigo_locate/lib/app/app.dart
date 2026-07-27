@@ -9,6 +9,8 @@ import '../features/contacts/contacts_provider.dart';
 import '../features/history/history_page.dart';
 import '../features/home/home_page.dart';
 import '../features/notifications/notifications_page.dart';
+import '../features/profile/profile_page.dart';
+import '../features/profile/profile_provider.dart';
 import '../features/settings/settings_page.dart';
 import '../features/splash/splash_page.dart';
 import '../features/tracking/live_map_page.dart';
@@ -28,28 +30,34 @@ class NavigoLocate extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => LiveTrackingProvider()),
         ChangeNotifierProvider(create: (_) => ContactsProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
       ],
-      child: MaterialApp(
-        navigatorKey: rootNavigatorKey,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        initialRoute: Routes.splash,
-        builder: (context, child) => NotificationPopupHost(
+      child: Consumer<ProfileProvider>(
+        builder: (context, profile, _) => MaterialApp(
           navigatorKey: rootNavigatorKey,
-          child: child!,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: profile.themeMode,
+          initialRoute: Routes.splash,
+          builder: (context, child) => NotificationPopupHost(
+            navigatorKey: rootNavigatorKey,
+            child: child!,
+          ),
+          routes: {
+            Routes.splash: (_) => const SplashPage(),
+            Routes.login: (_) => const LoginPage(),
+            Routes.register: (_) => const RegisterPage(),
+            Routes.forgotPassword: (_) => const ForgotPasswordPage(),
+            Routes.home: (_) => const HomePage(),
+            Routes.liveMap: (_) => const LiveMapPage(),
+            Routes.contacts: (_) => const ContactsPage(),
+            Routes.history: (_) => const HistoryPage(),
+            Routes.notifications: (_) => const NotificationsPage(),
+            Routes.settings: (_) => const SettingsPage(),
+            Routes.profile: (_) => const ProfilePage(),
+          },
         ),
-        routes: {
-          Routes.splash: (_) => const SplashPage(),
-          Routes.login: (_) => const LoginPage(),
-          Routes.register: (_) => const RegisterPage(),
-          Routes.forgotPassword: (_) => const ForgotPasswordPage(),
-          Routes.home: (_) => const HomePage(),
-          Routes.liveMap: (_) => const LiveMapPage(),
-          Routes.contacts: (_) => const ContactsPage(),
-          Routes.history: (_) => const HistoryPage(),
-          Routes.notifications: (_) => const NotificationsPage(),
-          Routes.settings: (_) => const SettingsPage(),
-        },
       ),
     );
   }

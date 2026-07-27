@@ -1,543 +1,345 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/router.dart';
-import '../../core/constants/app_assets.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/utils/local_clock_formatter.dart';
-import '../../shared/widgets/info_card.dart';
-import '../contacts/contacts_provider.dart';
-import '../auth/auth_service.dart';
+import '../../shared/widgets/fynder_widgets.dart';
+import '../profile/profile_provider.dart';
 import '../tracking/live_tracking_provider.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool _shared = false;
+
+  Future<void> _shareLocation() async {
+    final tracking = context.read<LiveTrackingProvider>();
+    if (!tracking.isTracking) {
+      await tracking.startTracking();
+      if (!mounted) return;
+      if (!tracking.isTracking) {
+        final message =
+            tracking.errorMessage ?? 'Unable to start location sharing.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+        return;
+      }
+    }
+
+    final point = tracking.latestLocation;
+    final link = point == null
+        ? 'Fynder live session: ${tracking.activeSessionId ?? 'active'}'
+        : 'I’m sharing my live location with Fynder: '
+              'https://maps.google.com/?q=${point.latitude},${point.longitude}';
+    await SharePlus.instance.share(
+      ShareParams(text: link, subject: 'My live location'),
+    );
+    if (mounted) setState(() => _shared = true);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer2<LiveTrackingProvider, ContactsProvider>(
-      builder: (context, tracking, contacts, _) {
-        final location = tracking.latestLocation;
-        final isActive = tracking.isTracking || tracking.isBusy;
+    final tracking = context.watch<LiveTrackingProvider>();
+    final profile = context.watch<ProfileProvider>();
+    final active = tracking.isTracking;
 
-        return Scaffold(
-          backgroundColor: AppColors.lightGrey,
-          appBar: AppBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(5),
-                  child: Image.asset(
-                    AppAssets.logo,
-                    width: 42,
-                    height: 30,
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.medium,
+    return Scaffold(
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 23),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                children: [
+                  const SizedBox(height: 24),
+                  const FynderHeader(),
+                  const SizedBox(height: 38),
+                  _LocationCard(
+                    profile: profile,
+                    tracking: tracking,
+                    onProfileTap: () =>
+                        Navigator.pushNamed(context, Routes.profile),
                   ),
-                ),
-                const SizedBox(width: 10),
-                const Text('NaviGo-Locate'),
-              ],
-            ),
-            actions: [
-              IconButton(
-                onPressed: () =>
-                    Navigator.pushNamed(context, Routes.notifications),
-                icon: const Icon(Icons.notifications_none),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: tracking.isBusy ? null : _shareLocation,
+                      icon: tracking.isBusy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : _shared
+                          ? const SizedBox.shrink()
+                          : const Icon(Icons.ios_share_outlined),
+                      label: Text(
+                        _shared ? 'Location shared!' : 'Share My Location',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _SharingStatus(active: active),
+                  const SizedBox(height: 150),
+                  const ControlFooter(),
+                ],
               ),
-            ],
+            ),
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _LocalGreeting(
-                  username:
-                      AuthService.currentSession?.user.username ?? 'there',
-                ),
-                const SizedBox(height: 20),
+        ),
+      ),
+    );
+  }
+}
 
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: tracking.isEmergency
-                        ? AppColors.danger
-                        : AppColors.primary,
-                    borderRadius: BorderRadius.circular(24),
+class _LocationCard extends StatelessWidget {
+  const _LocationCard({
+    required this.profile,
+    required this.tracking,
+    required this.onProfileTap,
+  });
+
+  final ProfileProvider profile;
+  final LiveTrackingProvider tracking;
+  final VoidCallback onProfileTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final address =
+        tracking.latestAddress ?? 'Waiting for your current location';
+    final location = tracking.latestLocation;
+    final coordinate = location == null
+        ? 'GPS location'
+        : '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: Theme.of(context).brightness == Brightness.light
+            ? const [
+                BoxShadow(
+                  color: Color(0x0D000000),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: onProfileTap,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Row(
+                children: [
+                  ProfileAvatar(
+                    index: profile.avatarIndex,
+                    galleryImage: profile.galleryImage,
+                    size: 56,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tracking.isTracking
-                            ? tracking.isEmergency
-                                  ? 'SOS Mode Active'
-                                  : 'Live Tracking Active'
-                            : 'You are Safe',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        tracking.isTracking
-                            ? 'Your location is updating every 2 seconds.'
-                            : 'Live tracking is currently off.',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                    ],
+                        const SizedBox(height: 3),
+                        const Text(
+                          'tap to edit profile',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF788397),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 20),
-
-                InfoCard(
-                  icon: Icons.location_on_outlined,
-                  title: 'Current Location',
-                  value: location == null
-                      ? 'Waiting for GPS'
-                      : tracking.latestAddress ??
-                            '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)}',
-                  color: AppColors.primary,
-                ),
-                const SizedBox(height: 14),
-
-                InfoCard(
-                  icon: Icons.gps_fixed,
-                  title: 'GPS Accuracy',
-                  value: location == null
-                      ? '-- meters'
-                      : '${location.accuracy.toStringAsFixed(0)} meters',
-                  color: Colors.green,
-                ),
-                const SizedBox(height: 14),
-
-                InfoCard(
-                  icon: Icons.speed_rounded,
-                  title: 'Speed',
-                  value: location == null
-                      ? '-- m/s'
-                      : '${location.speed.toStringAsFixed(1)} m/s',
-                  color: Colors.orange,
-                ),
-                const SizedBox(height: 14),
-
-                InfoCard(
-                  icon: Icons.wifi,
-                  title: 'Tracking Status',
-                  value: tracking.isTracking ? 'Online' : 'Inactive',
-                  color: Colors.purple,
-                ),
-
-                if (tracking.destinationRoute != null) ...[
-                  const SizedBox(height: 14),
-                  InfoCard(
-                    icon: Icons.route_outlined,
-                    title: 'Destination',
-                    value: tracking.destinationRoute!.label,
-                    color: AppColors.primary,
-                  ),
+                  const Icon(Icons.chevron_right, color: Color(0xFF788397)),
                 ],
-
-                if (tracking.errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    tracking.errorMessage!,
-                    style: const TextStyle(color: AppColors.danger),
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-
-                GridView.count(
-                  crossAxisCount: MediaQuery.of(context).size.width > 640
-                      ? 4
-                      : 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.65,
+              ),
+            ),
+          ),
+          Divider(height: 1, color: Theme.of(context).dividerColor),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 27),
+            child: Column(
+              children: [
+                Row(
                   children: [
-                    _HomeActionTile(
-                      icon: Icons.map_outlined,
-                      title: 'Live Map',
-                      subtitle: tracking.isTracking
-                          ? 'Open session'
-                          : 'No active session',
-                      onTap: tracking.isTracking
-                          ? () => Navigator.pushNamed(context, Routes.liveMap)
-                          : null,
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: tracking.isTracking
+                            ? fynderGreen
+                            : const Color(0xFF98A2B3),
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                    _HomeActionTile(
-                      icon: Icons.people_alt_outlined,
-                      title: 'Contacts',
-                      subtitle: '${contacts.contacts.length} trusted',
-                      onTap: () =>
-                          Navigator.pushNamed(context, Routes.contacts),
+                    const SizedBox(width: 12),
+                    Text(
+                      tracking.isTracking ? 'Live' : 'Offline',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: tracking.isTracking
+                            ? fynderGreen
+                            : const Color(0xFF98A2B3),
+                      ),
                     ),
-                    _HomeActionTile(
-                      icon: Icons.timeline_outlined,
-                      title: 'History',
-                      subtitle: 'Route timeline',
-                      onTap: () => Navigator.pushNamed(context, Routes.history),
-                    ),
-                    _HomeActionTile(
-                      icon: Icons.settings_outlined,
-                      title: 'Settings',
-                      subtitle: 'Safety controls',
-                      onTap: () =>
-                          Navigator.pushNamed(context, Routes.settings),
+                    const Spacer(),
+                    Text(
+                      tracking.isTracking ? 'updated just now' : 'not sharing',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF7A8498),
+                      ),
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    onPressed: isActive
-                        ? null
-                        : () => _startTracking(context, emergency: false),
-                    icon: tracking.isBusy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Start Live Tracking'),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: OutlinedButton.icon(
-                    onPressed: isActive
-                        ? null
-                        : () => _showDestinationSheet(context),
-                    icon: const Icon(Icons.route_outlined),
-                    label: const Text('Route to Destination'),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.danger,
-                      foregroundColor: Colors.white,
+                const SizedBox(height: 30),
+                Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 18,
+                      backgroundColor: fynderBlue,
+                      child: Icon(
+                        Icons.location_on,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
-                    onPressed: isActive
-                        ? null
-                        : () => _startTracking(context, emergency: true),
-                    icon: const Icon(Icons.sos),
-                    label: const Text('SOS Emergency'),
-                  ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            coordinate,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              color: Color(0xFF7A8498),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            address,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (tracking.isTracking)
+                            const Text(
+                              'You’re here right now',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: fynderBlue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-
-                if (tracking.isTracking) ...[
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pushNamed(context, Routes.liveMap);
-                      },
-                      icon: const Icon(Icons.map_outlined),
-                      label: const Text('Open Live Map'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          _shareLiveMap(context, tracking, contacts),
-                      icon: const Icon(Icons.ios_share_outlined),
-                      label: const Text('Share Live Map'),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
+}
 
-  Future<void> _startTracking(
-    BuildContext context, {
-    required bool emergency,
-    String? destinationLabel,
-    double? destinationLatitude,
-    double? destinationLongitude,
-  }) async {
-    final tracking = context.read<LiveTrackingProvider>();
-    await tracking.startTracking(
-      emergency: emergency,
-      destinationLabel: destinationLabel,
-      destinationLatitude: destinationLatitude,
-      destinationLongitude: destinationLongitude,
-    );
+class _SharingStatus extends StatelessWidget {
+  const _SharingStatus({required this.active});
+  final bool active;
 
-    if (!context.mounted) return;
-    if (tracking.isTracking) {
-      Navigator.pushNamed(context, Routes.liveMap);
-    } else if (tracking.errorMessage != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tracking.errorMessage!)));
-    }
-  }
-
-  void _showDestinationSheet(BuildContext context) {
-    final labelController = TextEditingController();
-    final latitudeController = TextEditingController();
-    final longitudeController = TextEditingController();
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: Theme.of(context).brightness == Brightness.light
+          ? const [
+              BoxShadow(
+                color: Color(0x0D000000),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ]
+          : null,
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: const BoxDecoration(
+            color: Color(0xFFD9FAE8),
+            shape: BoxShape.circle,
           ),
+          child: Icon(
+            active ? Icons.check_circle_outline : Icons.shield_outlined,
+            color: fynderGreen,
+            size: 28,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Where are you going?',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: labelController,
-                decoration: const InputDecoration(
-                  labelText: 'Destination name',
-                  prefixIcon: Icon(Icons.place_outlined),
+              Text.rich(
+                TextSpan(
+                  style: DefaultTextStyle.of(
+                    context,
+                  ).style.copyWith(fontSize: 12, fontWeight: FontWeight.w700),
+                  children: [
+                    const TextSpan(text: 'Location sharing is '),
+                    TextSpan(
+                      text: active ? 'ON' : 'OFF',
+                      style: TextStyle(
+                        color: active ? fynderGreen : const Color(0xFF98A2B3),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: latitudeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Destination latitude',
-                  prefixIcon: Icon(Icons.explore_outlined),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: longitudeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Destination longitude',
-                  prefixIcon: Icon(Icons.explore_outlined),
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    final label = labelController.text.trim();
-                    final latitude = double.tryParse(
-                      latitudeController.text.trim(),
-                    );
-                    final longitude = double.tryParse(
-                      longitudeController.text.trim(),
-                    );
-
-                    if (label.isEmpty ||
-                        latitude == null ||
-                        longitude == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Enter a name, latitude, and longitude.',
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-
-                    Navigator.pop(sheetContext);
-                    _startTracking(
-                      context,
-                      emergency: false,
-                      destinationLabel: label,
-                      destinationLatitude: latitude,
-                      destinationLongitude: longitude,
-                    );
-                  },
-                  icon: const Icon(Icons.navigation_outlined),
-                  label: const Text('Start Route'),
-                ),
+              const SizedBox(height: 6),
+              Text(
+                active
+                    ? 'Your location is being shared in real time.'
+                    : 'Tap the button above when you’re ready to share.',
+                style: const TextStyle(fontSize: 10, color: Color(0xFF7A8498)),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  void _shareLiveMap(
-    BuildContext context,
-    LiveTrackingProvider tracking,
-    ContactsProvider contacts,
-  ) {
-    final viewers = contacts.contacts
-        .where((contact) => contact.permissions.canViewLiveLocation)
-        .length;
-    final session = tracking.activeSessionId ?? 'current';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Live session $session shared with $viewers contacts.'),
-      ),
-    );
-  }
-}
-
-class _LocalGreeting extends StatefulWidget {
-  const _LocalGreeting({required this.username});
-
-  final String username;
-
-  @override
-  State<_LocalGreeting> createState() => _LocalGreetingState();
-}
-
-class _LocalGreetingState extends State<_LocalGreeting> {
-  late DateTime _now;
-  Timer? _clock;
-
-  @override
-  void initState() {
-    super.initState();
-    _now = DateTime.now();
-    _clock = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
-    });
-  }
-
-  @override
-  void dispose() {
-    _clock?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '${LocalClockFormatter.greetingFor(_now)},',
-          style: const TextStyle(color: AppColors.grey),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          widget.username,
-          style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '${DateFormat('EEEE, MMMM d, y | h:mm a').format(_now)} | ${LocalClockFormatter.timeZoneLabel(_now)}',
-          style: const TextStyle(color: AppColors.grey, fontSize: 13),
         ),
       ],
-    );
-  }
-}
-
-class _HomeActionTile extends StatelessWidget {
-  const _HomeActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Ink(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE4E7EC)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(icon, color: enabled ? AppColors.primary : AppColors.grey),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: enabled ? AppColors.dark : AppColors.grey,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.grey, fontSize: 12),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }

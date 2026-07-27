@@ -50,6 +50,11 @@ dependencies:
   battery_plus: ^7.1.0
   connectivity_plus: ^7.2.0
   web: ^1.1.1
+  image_picker: ^1.2.1
+  share_plus: ^13.3.0
+  # 2.3.x uses jni 1.0.1, whose Android plugin is currently incompatible
+  # with this project's AGP 9 toolchain.
+  path_provider_android: 2.2.22
 
 dev_dependencies:
   flutter_test:
@@ -76,6 +81,7 @@ flutter:
   assets:
     - assets/branding/logo.png
     - assets/branding/intro-logo.png
+    - assets/avatars/avatar-sprite.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

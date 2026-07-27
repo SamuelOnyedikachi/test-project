@@ -8,3 +8,110 @@ on select users there should be option to send to all users that are registered 
 
 also i noticed the app only greets Good morning with my name "samuel".
 it should greet based on diffrernt location time zone and time stamp along side with users Username
+
+
+For this project, run these from navigo_locate/:
+# Android release APK
+flutter pub get
+flutter build apk --release \
+  --dart-define=NAVIGO_API_BASE_URL=https://navigo-locate-production.up.railway.app/api/v1 \
+  --dart-define=GOOGLE_MAPS_ANDROID_API_KEY=YOUR_ANDROID_MAPS_KEY
+The APK will be at build/app/outputs/flutter-apk/app-release.apk.
+For iOS, you must build on macOS with Xcode installed:
+flutter pub get
+cd ios
+pod install
+cd ..
+flutter build ipa --release \
+  --dart-define=NAVIGO_API_BASE_URL=https://navigo-locate-production.up.railway.app/api/v1
+The IPA/archive output will be under build/ios/ipa/. Before distribution, open ios/Runner.xcworkspace in Xcode and configure your Apple Developer Team, bundle identifier, signing certificate, provisioning profile, and the iOS Google Maps API key. The Android build currently running here is still active; I’ll finish validating its artifact and include the exact path and checksum.
+
+
+
+
+Small correction to the Android command above: this project’s Gradle file reads the Maps key from an environment variable, not a Dart define. Use GOOGLE_MAPS_ANDROID_API_KEY=YOUR_KEY flutter build apk ...; I’ll include the corrected complete command in the final handoff.
+
+
+flutter pub get
+cd ios
+pod install
+cd ..
+flutter build ipa --release \
+  --dart-define=NAVIGO_API_BASE_URL=https://navigo-locate-production.up.railway.app/api/v1
+
+  # Android release APK
+flutter pub get
+flutter build apk --release \
+  --dart-define=NAVIGO_API_BASE_URL=https://navigo-locate-production.up.railway.app/api/v1 \
+  --dart-define=GOOGLE_MAPS_ANDROID_API_KEY=YOUR_ANDROID_MAPS_KEY
+
+
+
+
+  For this project, run these from navigo_locate/:
+# Android release APK
+flutter pub get
+flutter build apk --release \
+  --dart-define=NAVIGO_API_BASE_URL=https://navigo-locate-production.up.railway.app/api/v1 \
+  --dart-define=GOOGLE_MAPS_ANDROID_API_KEY=YOUR_ANDROID_MAPS_KEY
+The APK will be at build/app/outputs/flutter-apk/app-release.apk.
+For iOS, you must build on macOS with Xcode installed:
+flutter pub get
+cd ios
+pod install
+cd ..
+flutter build ipa --release \
+  --dart-define=NAVIGO_API_BASE_URL=https://navigo-locate-production.up.railway.app/api/v1
+The IPA/archive output will be under build/ios/ipa/. Before distribution, open ios/Runner.xcworkspace in Xcode and configure your Apple Developer Team, bundle identifier, signing certificate, provisioning profile, and the iOS Google Maps API key. The Android build currently running here is still active; I’ll finish validating its artifact and include the exact path and checksum.
+
+
+
+
+Small correction to the Android command above: this project’s Gradle file reads the Maps key from an environment variable, not a Dart define. Use GOOGLE_MAPS_ANDROID_API_KEY=YOUR_KEY flutter build apk ...; I’ll include the corrected complete command in the final handoff.
+
+
+
+
+
+
+
+The restarted APK build has passed the earlier JNI failure and completed Dart/icon optimization; it’s now in final native packaging. The only emitted message is a future Flutter compatibility warning from firebase_database, not a build failure.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Approve for me
+
+
+
+
+
+
+
+5.6 SolLight
+
+
+
+
+
+
+
+
+
+
+Work locallyLocal

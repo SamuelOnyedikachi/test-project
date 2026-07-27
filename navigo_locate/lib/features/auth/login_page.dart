@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../app/router.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../devices/device_registration_service.dart';
+import '../profile/profile_provider.dart';
 import 'auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -151,6 +153,7 @@ class _LoginPageState extends State<LoginPage> {
       await _registerDeviceAfterLogin(session.accessToken);
 
       if (!mounted) return;
+      context.read<ProfileProvider>().syncAuthenticatedUser(session.user);
       Navigator.pushReplacementNamed(context, Routes.home);
     } catch (error) {
       if (!mounted) return;
